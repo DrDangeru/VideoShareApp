@@ -1,0 +1,97 @@
+{{define "page_content"}}
+<section class="watch-layout">
+
+  <div class="watch-main">
+    <div class="watch-player">
+      <video controls autoplay preload="auto" poster="{{.Video.ThumbnailURL}}">
+        <source src="{{.Video.MediaURL}}" type="video/mp4">
+      </video>
+    </div>
+
+    <div class="watch-info panel">
+      <h1 class="watch-title">{{.Video.Title}}</h1>
+      <p class="muted watch-meta">{{.Video.ChannelName}} &middot; {{.Video.Location}}</p>
+
+      {{if $.CurrentUser}}
+      <div class="actions watch-actions">
+        <form method="post" action="/videos/{{.Video.ID}}/favorite">
+          <button class="button" type="submit">{{if .Video.IsFavorite}}Favorited{{else}}Favorite{{end}}</button>
+        </form>
+        <form method="post" action="/channels/{{.Video.ChannelID}}/subscribe">
+          <button class="button secondary" type="submit">{{if .Video.IsSubscribed}}Subscribed{{else}}Subscribe{{end}}</button>
+        </form>
+        {{if or $.CurrentUser.IsAdmin (eq .Video.ChannelID $.CurrentUser.ID)}}
+          <a href="/edit-video/{{.Video.ID}}" class="button secondary">Edit / Lock</a>
+        {{end}}
+      </div>
+      {{end}}
+
+      {{if .Video.Description}}
+      <p class="watch-description">{{.Video.Description}}</p>
+      {{end}}
+    </div>
+  </div>
+
+  <aside class="watch-sidebar">
+
+    {{if .SimilarVideos}}
+    <section class="panel sidebar-panel">
+      <div class="sidebar-heading">
+        <h2>More like this</h2>
+      </div>
+      <div class="similar-list">
+        {{range .SimilarVideos}}
+        <a href="/watch/{{.ID}}" class="similar-item">
+          <div class="similar-thumb">
+            {{if .ThumbnailURL}}
+              <img src="{{.ThumbnailURL}}" alt="{{.Title}}">
+            {{else}}
+              <div class="similar-thumb-placeholder"></div>
+            {{end}}
+          </div>
+          <div class="similar-copy">
+            <p class="similar-title">{{.Title}}</p>
+            <p class="muted">{{.ChannelName}} &middot; {{.Location}}</p>
+          </div>
+        </a>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+
+    {{if .SimilarChannels}}
+    <section class="panel sidebar-panel">
+      <div class="sidebar-heading">
+        <h2>Channels nearby</h2>
+        <p class="muted">From {{.Video.Location}}</p>
+      </div>
+      <div class="sidebar-list">
+        {{range .SimilarChannels}}
+        <article class="sidebar-item">
+          <div class="sidebar-copy">
+            <a href="/channel/{{.ChannelID}}" class="video-title-link sidebar-channel-link">
+              {{if .AvatarURL}}
+                <img src="{{.AvatarURL}}" class="sidebar-avatar" alt="">
+              {{end}}
+              <h3 class="sidebar-channel-title">{{.ChannelName}}</h3>
+            </a>
+            <p class="muted sidebar-channel-location">{{.Location}}</p>
+            <p>{{.LatestVideoTitle}}</p>
+          </div>
+          {{if $.CurrentUser}}
+          <form method="post" action="/channels/{{.ChannelID}}/subscribe">
+            <button class="button secondary" type="submit">
+              {{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}</button>
+          </form>
+          {{end}}
+        </article>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+
+  </aside>
+</section>
+{{end}}
+
+{{define "watch"}}{{template "layout" .}}{{end}}

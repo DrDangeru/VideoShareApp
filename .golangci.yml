@@ -1,0 +1,14 @@
+run:
+  timeout: 5m
+
+linters-settings:
+  lll:
+    max-line-length: 100
+
+linters:
+  enable:
+    - lll
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -1,0 +1,18 @@
+/data/
+/tmp/
+/dist/
+/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+.env
+
+# /static/uploads/users/*
+# !/static/uploads/users/.gitkeep
+
+# /Videos/*
+
+thumbgen.exe
+*~
+cmd/thumbgen/*  

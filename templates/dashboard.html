@@ -1,0 +1,168 @@
+{{define "page_content"}}
+<section class="panel">
+  <div class="sidebar-heading">
+    <h2>Upload a Video</h2>
+    <p class="muted">Choose a channel, pick your file, capture a thumbnail, and add details.</p>
+  </div>
+
+  <form class="form upload-form" method="POST" action="/upload" enctype="multipart/form-data">
+
+    <!-- 1. Channel -->
+    <div class="form-group">
+      <h3>1. Channel</h3>
+      <label>
+        <span>Select an existing channel</span>
+        <select name="channel_id" id="channel-select">
+          <option value="">-- Choose --</option>
+          {{range .Channels}}
+          <option value="{{.ID}}">{{.Name}} ({{.Location}})</option>
+          {{end}}
+        </select>
+      </label>
+      <label>
+        <span>Or create a new channel</span>
+        <input type="text" name="new_channel" id="new-channel" placeholder="My New Channel">
+      </label>
+    </div>
+
+    <!-- 2. Video file + thumbnail -->
+    <div class="form-group">
+      <h3>2. Video &amp; Thumbnail</h3>
+      <label>
+        <span>Video File (MP4, WebM, MOV)</span>
+        <input type="file" name="video" id="video-file" accept="video/mp4,video/webm,video/quicktime" required>
+      </label>
+
+      <video id="vid-preview" controls class="video-preview hidden"></video>
+
+      <div class="thumbnail-capture hidden" id="thumb-section">
+        <button type="button" id="btn-capture" class="button secondary">Capture Thumbnail</button>
+        <div>
+          <input type="hidden" name="thumbnail" id="thumbnail-data">
+          <img id="thumb-preview" src="" class="thumbnail-preview hidden">
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Details -->
+    <div class="form-group">
+      <h3>3. Details</h3>
+      <label>
+        <span>Title</span>
+        <input type="text" name="title" placeholder="My Awesome Video" required>
+      </label>
+      <label>
+        <span>Description</span>
+        <textarea name="description" rows="3"></textarea>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="is_public" value="1" checked>
+        <span>Make video public</span>
+      </label>
+    </div>
+
+    <button class="button" type="submit">Upload Video</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="sidebar-heading">
+    <h2>{{.Heading}}</h2>
+  </div>
+</section>
+
+<section class="video-grid">
+  {{range .Videos}}
+  <article class="card video-card">
+    <a href="/watch/{{.ID}}" class="video-thumb-link">
+      {{if .ThumbnailURL}}
+        <img class="video-thumb" src="{{.ThumbnailURL}}" alt="{{.Title}}">
+      {{else}}
+        <div class="video-thumb video-thumb-placeholder"></div>
+      {{end}}
+    </a>
+    <div class="card-body">
+      <a href="/watch/{{.ID}}" class="video-title-link"><h3>{{.Title}}</h3></a>
+      <p class="muted">{{.ChannelName}} · {{.Location}}</p>
+      <p>{{.Description}}</p>
+      <div class="actions">
+        {{if .IsPublic}}
+          <span class="button secondary">Public</span>
+        {{else}}
+          <span class="button secondary private-badge">Private</span>
+        {{end}}
+        <a href="/edit-video/{{.ID}}" class="button secondary">Edit</a>
+      </div>
+    </div>
+  </article>
+  {{else}}
+  <p>You haven't uploaded any videos yet.</p>
+  {{end}}
+</section>
+
+<script>
+  const fileInput = document.getElementById('video-file');
+  const vidPreview = document.getElementById('vid-preview');
+  const thumbSection = document.getElementById('thumb-section');
+  const captureBtn = document.getElementById('btn-capture');
+  const thumbPreview = document.getElementById('thumb-preview');
+  const thumbData = document.getElementById('thumbnail-data');
+  const channelSelect = document.getElementById('channel-select');
+  const newChannelInput = document.getElementById('new-channel');
+
+  // Clear select when typing a new channel name, and vice versa
+  newChannelInput.addEventListener('input', () => {
+    if (newChannelInput.value.trim()) channelSelect.value = '';
+  });
+  channelSelect.addEventListener('change', () => {
+    if (channelSelect.value) newChannelInput.value = '';
+  });
+
+  function captureFrame() {
+    if (!vidPreview.videoWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#1f1f1f';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const scale = Math.min(canvas.width / vidPreview.videoWidth, canvas.height / vidPreview.videoHeight);
+    const w = vidPreview.videoWidth * scale;
+    const h = vidPreview.videoHeight * scale;
+    const x = (canvas.width - w) / 2;
+    const y = (canvas.height - h) / 2;
+    ctx.drawImage(vidPreview, x, y, w, h);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    thumbData.value = dataUrl;
+    thumbPreview.src = dataUrl;
+    thumbPreview.classList.remove('hidden');
+    thumbPreview.classList.add('block');
+  }
+
+  // Show video preview when file is selected and auto-capture first frame
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    vidPreview.src = url;
+    vidPreview.classList.remove('hidden');
+    vidPreview.classList.add('block');
+    thumbSection.classList.remove('hidden');
+    thumbSection.classList.add('thumbnail-capture');
+
+    vidPreview.addEventListener('loadeddata', function onLoaded() {
+      vidPreview.currentTime = 0.1;
+      vidPreview.removeEventListener('loadeddata', onLoaded);
+    });
+    vidPreview.addEventListener('seeked', function onSeeked() {
+      captureFrame();
+      vidPreview.removeEventListener('seeked', onSeeked);
+    });
+  });
+
+  // Manual re-capture at any point
+  captureBtn.addEventListener('click', captureFrame);
+</script>
+{{end}}
+
+{{define "dashboard"}}{{template "layout" .}}{{end}}

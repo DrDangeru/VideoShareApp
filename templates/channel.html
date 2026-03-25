@@ -1,0 +1,61 @@
+{{define "page_content"}}
+<section class="hero channel-hero">
+  <div class="channel-hero-content">
+    {{if .Channel.AvatarURL}}
+      <img src="{{.Channel.AvatarURL}}" class="channel-avatar-large" alt="{{.Channel.Name}}">
+    {{else}}
+      <div class="channel-avatar-large placeholder"></div>
+    {{end}}
+    <h1>{{.Channel.Name}}</h1>
+    <p class="muted">{{.Channel.Location}}</p>
+    {{if .Channel.Description}}
+    <p class="channel-description">{{.Channel.Description}}</p>
+    {{end}}
+    {{if .CurrentUser}}
+    <div class="actions channel-actions">
+      <form method="post" action="/channels/{{.Channel.ID}}/subscribe">
+        <button class="button" type="submit">{{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}</button>
+      </form>
+      {{if or .CurrentUser.IsAdmin (eq .Channel.OwnerUserID .CurrentUser.ID)}}
+        <a href="/edit-channel/{{.Channel.ID}}" class="button secondary">Edit / Lock Channel</a>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+</section>
+
+<section class="video-grid">
+  {{range .Videos}}
+  <article class="card video-card">
+    <a href="/watch/{{.ID}}" class="video-thumb-link">
+      {{if .ThumbnailURL}}
+        <img class="video-thumb" src="{{.ThumbnailURL}}" alt="{{.Title}}">
+      {{else}}
+        <div class="video-thumb video-thumb-placeholder"></div>
+      {{end}}
+    </a>
+    <div class="card-body">
+      <a href="/watch/{{.ID}}" class="video-title-link"><h3>{{.Title}}</h3></a>
+      <p class="muted">{{.Location}}</p>
+      <p>{{.Description}}</p>
+      {{if $.CurrentUser}}
+      <div class="actions">
+        <form method="post" action="/videos/{{.ID}}/favorite">
+          <button class="button" type="submit">{{if .IsFavorite}}Favorited{{else}}Favorite{{end}}</button>
+        </form>
+        {{if $.CurrentUser.IsAdmin}}
+          <a href="/edit-video/{{.ID}}" class="button secondary">Edit / Lock</a>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+  </article>
+  {{else}}
+  <div class="panel">
+    <p>This channel hasn't uploaded any videos yet.</p>
+  </div>
+  {{end}}
+</section>
+{{end}}
+
+{{define "channel"}}{{template "layout" .}}{{end}}

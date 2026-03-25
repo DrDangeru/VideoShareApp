@@ -1,0 +1,27 @@
+{
+  "html.format.lineWidth": 100,
+  "html.max-line-length": 100,
+  "files.associations": {
+    "*.html": "html"
+  },
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.formatOnSave": true,
+    "editor.rulers": [100],
+    "editor.wordWrap": "off"
+  },
+  "[html]": {
+    "editor.wordWrap": "off",
+    "editor.rulers": [100]
+  },
+  "go.alternateTools": {
+    "customFormatter": "golines"
+  },
+  "go.formatFlags": [
+    "--max-len=100",
+    "--base-formatter=gofumpt"
+  ],
+  "go.formatTool": "custom",
+  "editor.rulers": [100],
+  "editor.wordWrap": "off"
+}

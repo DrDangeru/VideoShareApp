@@ -1,0 +1,102 @@
+{{define "page_content"}}
+<section class="panel edit-video-panel">
+  <div class="sidebar-heading text-center">
+    <h2>{{.Heading}}</h2>
+    <p class="muted">Update details for this channel.</p>
+  </div>
+  
+  <form class="form" method="POST" action="/edit-channel/{{.Channel.ID}}">
+    
+    {{if .IsOwner}}
+    <!-- Avatar Upload (Owner Only) -->
+    <div class="form-group">
+      <h3 class="text-center">Channel Avatar</h3>
+      <p class="muted help-text text-center">Select an image to use as your channel avatar.</p>
+      
+      <div class="avatar-upload-wrapper">
+        <input type="file" id="avatar-upload" accept="image/*" class="hidden">
+        <button type="button" class="button secondary" onclick="document.getElementById('avatar-upload').click()">Upload Image</button>
+        
+        <input type="hidden" name="avatar" id="avatar-data">
+        <div class="avatar-preview-container">
+          {{if .Channel.AvatarURL}}
+            <img id="avatar-preview" src="{{.Channel.AvatarURL}}" class="avatar-preview block">
+          {{else}}
+            <img id="avatar-preview" src="" class="avatar-preview hidden">
+          {{end}}
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Fields (Owner Only) -->
+    <div class="form-group">
+      <h3 class="text-center">Channel Details</h3>
+      <label>
+        <span class="text-center">Channel Name</span>
+        <input type="text" name="name" value="{{.Form.Name}}" required class="text-center">
+      </label>
+      
+      <label>
+        <span class="text-center">Location</span>
+        <input type="text" name="location" value="{{.Form.Location}}" required class="text-center">
+      </label>
+
+      <label>
+        <span class="text-center">Description</span>
+        <textarea name="description" rows="4" class="text-center">{{.Form.Description}}</textarea>
+      </label>
+    </div>
+    {{else}}
+    <div class="form-group text-center">
+      <h3>Channel Details (Read Only)</h3>
+      {{if .Channel.AvatarURL}}
+        <img src="{{.Channel.AvatarURL}}" class="avatar-preview readonly">
+      {{end}}
+      <p><strong>Name:</strong> {{.Form.Name}}</p>
+      <p><strong>Location:</strong> {{.Form.Location}}</p>
+      <p><strong>Description:</strong> {{.Form.Description}}</p>
+    </div>
+    {{end}}
+
+    {{if .CurrentUser.IsAdmin}}
+    <div class="form-group">
+      <h3 class="text-center">Admin Controls</h3>
+      <label class="checkbox-label" style="justify-content: center;">
+        <input type="checkbox" name="is_admin_locked" value="1" {{if .Form.IsAdminLocked}}checked{{end}}>
+        <span>Admin lock channel (hide from public feeds regardless of owner settings)</span>
+      </label>
+    </div>
+    {{end}}
+
+    <div class="form-actions">
+      <a href="/channel/{{.Channel.ID}}" class="button secondary">Cancel</a>
+      <button class="button" type="submit">Save Changes</button>
+    </div>
+  </form>
+</section>
+
+{{if .IsOwner}}
+<script>
+  const fileInput = document.getElementById('avatar-upload');
+  const preview = document.getElementById('avatar-preview');
+  const avatarData = document.getElementById('avatar-data');
+
+  fileInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const dataUrl = event.target.result;
+      avatarData.value = dataUrl;
+      preview.src = dataUrl;
+      preview.classList.remove('hidden');
+      preview.classList.add('block');
+    };
+    reader.readAsDataURL(file);
+  });
+</script>
+{{end}}
+{{end}}
+
+{{define "edit_channel"}}{{template "layout" .}}{{end}}

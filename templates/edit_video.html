@@ -1,0 +1,123 @@
+{{define "page_content"}}
+<section class="panel edit-video-panel">
+  <div class="sidebar-heading">
+    <h2>{{.Heading}}</h2>
+    <p class="muted">Add details and pick a thumbnail for your video.</p>
+  </div>
+  
+  <form class="form" method="POST" action="/edit-video/{{.Video.ID}}">
+    
+    {{if .IsOwner}}
+    <!-- Thumbnail Picker (Owner Only) -->
+    <div class="form-group">
+      <h3>1. Choose a Thumbnail</h3>
+      <p class="muted help-text">Play or scrub through the video and click "Capture Frame" to set your thumbnail.</p>
+      
+      <video id="vid-player" src="{{.Video.MediaURL}}" controls class="video-preview"></video>
+      
+      <div class="thumbnail-capture">
+        <button type="button" id="btn-capture" class="button secondary">📸 Capture Frame</button>
+        
+        <div>
+          <input type="hidden" name="thumbnail" id="thumbnail-data">
+          {{if .Video.ThumbnailURL}}
+            <img id="thumb-preview" src="{{.Video.ThumbnailURL}}" class="thumbnail-preview block">
+          {{else}}
+            <img id="thumb-preview" src="" class="thumbnail-preview hidden">
+          {{end}}
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Fields (Owner Only) -->
+    <div class="form-group">
+      <h3>2. Video Details</h3>
+      <label>
+        <span>Title</span>
+        <input type="text" name="title" value="{{.Form.Title}}" placeholder="My Awesome Video" required>
+      </label>
+      
+      <label>
+        <span>Description</span>
+        <textarea name="description" rows="4">{{.Form.Description}}</textarea>
+      </label>
+      
+      <label class="checkbox-label">
+        <input type="checkbox" name="is_public" value="1" {{if .Form.IsPublic}}checked{{end}}>
+        <span>Make video public</span>
+      </label>
+    </div>
+    {{else}}
+    <div class="form-group">
+      <h3>Video Details (Read Only)</h3>
+      <p><strong>Title:</strong> {{.Form.Title}}</p>
+      <p><strong>Description:</strong> {{.Form.Description}}</p>
+      <p><strong>Status:</strong> {{if .Form.IsPublic}}Public{{else}}Private{{end}}</p>
+    </div>
+    {{end}}
+
+    {{if .CurrentUser.IsAdmin}}
+    <div class="form-group">
+      <h3>Admin Controls</h3>
+      <label class="checkbox-label">
+        <input type="checkbox" name="is_admin_locked" value="1" {{if .Form.IsAdminLocked}}checked{{end}}>
+        <span>Admin lock video (hide from public feeds regardless of owner settings)</span>
+      </label>
+    </div>
+    {{end}}
+
+    <div class="form-actions">
+      <a href="/dashboard" class="button secondary">Cancel</a>
+      <button class="button" type="submit">Save Changes</button>
+    </div>
+  </form>
+</section>
+
+{{if .IsOwner}}
+<script>
+  const video = document.getElementById('vid-player');
+  const captureBtn = document.getElementById('btn-capture');
+  const preview = document.getElementById('thumb-preview');
+  const thumbData = document.getElementById('thumbnail-data');
+
+  function captureFrame() {
+    if (!video.videoWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#1f1f1f';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+    const w = video.videoWidth * scale;
+    const h = video.videoHeight * scale;
+    const x = (canvas.width - w) / 2;
+    const y = (canvas.height - h) / 2;
+    ctx.drawImage(video, x, y, w, h);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    thumbData.value = dataUrl;
+    preview.src = dataUrl;
+    preview.classList.remove('hidden');
+    preview.classList.add('block');
+  }
+
+  captureBtn.addEventListener('click', captureFrame);
+
+  // Auto-capture first frame if no real thumbnail exists yet
+  const hasRealThumb = preview.src && !preview.src.includes('placeholder');
+  if (!hasRealThumb) {
+    video.addEventListener('loadeddata', function autoCapture() {
+      video.currentTime = 0.1;
+    });
+    video.addEventListener('seeked', function onSeeked() {
+      if (!thumbData.value) {
+        captureFrame();
+      }
+      video.removeEventListener('seeked', onSeeked);
+    });
+  }
+</script>
+{{end}}
+{{end}}
+
+{{define "edit_video"}}{{template "layout" .}}{{end}}

@@ -1,0 +1,122 @@
+{{define "page_content"}}
+<section class="hero">
+  <h1>{{.Heading}}</h1>
+  <p>{{.Subheading}}</p>
+</section>
+
+
+{{if not .CurrentUser}}
+<section class="panel auth-cta">
+  <h2>Start watching</h2>
+  <p>Create an account to save favorites, subscribe to channels, and get a location-aware feed.</p>
+  <div class="actions">
+    <a class="button" href="/register">Create account</a>
+    <a class="button secondary" href="/login">Login</a>
+  </div>
+</section>
+{{end}}
+
+<section class="feed-layout">
+  <aside class="sidebar-stack">
+    <section class="panel sidebar-panel">
+      <div class="sidebar-heading">
+        <h2>Subscribed</h2>
+        <p class="muted">Latest videos from channels you follow</p>
+      </div>
+      <div class="sidebar-list">
+        {{if .CurrentUser}}
+          {{range .SubscribedChannels}}
+          <article class="sidebar-item">
+            <div class="sidebar-copy">
+              <a href="/channel/{{.ChannelID}}" class="video-title-link sidebar-channel-link">
+                {{if .AvatarURL}}
+                  <img src="{{.AvatarURL}}" class="sidebar-avatar" alt="">
+                {{end}}
+                <h3 class="sidebar-channel-title">{{.ChannelName}}</h3>
+              </a>
+              <p class="muted sidebar-channel-location">{{.Location}}</p>
+              <p>{{.LatestVideoTitle}}</p>
+            </div>
+            <form method="post" action="/channels/{{.ChannelID}}/subscribe">
+              <button class="button secondary" type="submit">Subscribed</button>
+            </form>
+          </article>
+          {{else}}
+          <p>No subscribed channels yet.</p>
+          {{end}}
+        {{else}}
+          <p>Login to see your subscribed feed.</p>
+        {{end}}
+      </div>
+    </section>
+
+    <section class="panel sidebar-panel">
+      <div class="sidebar-heading">
+        <h2>Discover</h2>
+        <p class="muted">Find the newest upload from more channels</p>
+      </div>
+      <div class="sidebar-list">
+        {{range .FeedChannels}}
+        <article class="sidebar-item">
+          <div class="sidebar-copy">
+            <a href="/channel/{{.ChannelID}}" class="video-title-link sidebar-channel-link">
+              {{if .AvatarURL}}
+                <img src="{{.AvatarURL}}" class="sidebar-avatar" alt="">
+              {{end}}
+              <h3 class="sidebar-channel-title">{{.ChannelName}}</h3>
+            </a>
+            <p class="muted sidebar-channel-location">{{.Location}}</p>
+            <p>{{.LatestVideoTitle}}</p>
+          </div>
+          {{if $.CurrentUser}}
+          <form method="post" action="/channels/{{.ChannelID}}/subscribe">
+            <button class="button secondary" type="submit">{{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}</button>
+          </form>
+          {{end}}
+        </article>
+        {{else}}
+        <p>No channels available yet.</p>
+        {{end}}
+      </div>
+    </section>
+  </aside>
+
+  <section class="video-grid">
+    {{range .Videos}}
+    <article class="card video-card">
+      <a href="/watch/{{.ID}}" class="video-thumb-link">
+        {{if .ThumbnailURL}}
+          <img class="video-thumb" src="{{.ThumbnailURL}}" alt="{{.Title}}">
+        {{else}}
+          <div class="video-thumb video-thumb-placeholder"></div>
+        {{end}}
+      </a>
+      <div class="card-body">
+        <a href="/watch/{{.ID}}" class="video-title-link"><h3>{{.Title}}</h3></a>
+        <p class="muted"><a href="/channel/{{.ChannelID}}" class="video-title-link muted">{{.ChannelName}}</a> · {{.Location}}</p>
+        <p>{{.Description}}</p>
+        {{if $.CurrentUser}}
+        <div class="actions">
+          <form method="post" action="/videos/{{.ID}}/favorite">
+            <button class="button" type="submit">{{if .IsFavorite}}Favorited{{else}}Favorite{{end}}</button>
+          </form>
+          <form method="post" action="/channels/{{.ChannelID}}/subscribe">
+            <button class="button secondary" type="submit">{{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}</button>
+          </form>
+          {{if or $.CurrentUser.IsAdmin (eq .ChannelID $.CurrentUser.ID)}}
+            <a href="/edit-video/{{.ID}}" class="button secondary">Edit / Lock</a>
+          {{end}}
+        </div>
+        {{end}}
+      </div>
+    </article>
+    {{else}}
+    <p>No videos available yet.</p>
+    {{end}}
+  </section>
+</section>
+{{end}}
+
+{{define "home"}}{{template "layout" .}}{{end}}
+
+

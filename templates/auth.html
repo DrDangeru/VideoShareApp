@@ -1,0 +1,32 @@
+{{define "page_content"}}
+<section class="panel auth-panel">
+  <h1>{{.Heading}}</h1>
+  {{if .Error}}
+    <p class="error">{{.Error}}</p>
+  {{end}}
+  <form class="form" method="post" action="{{.Action}}">
+    <label>
+      <span>Email</span>
+      <input type="email" name="email" required>
+    </label>
+
+    <label>
+      <span>Password</span>
+      <input type="password" name="password" required minlength="6">
+    </label>
+
+    {{if .ShowLocation}}
+    <label>
+      <span>Location</span>
+      <input type="text" name="location" placeholder="City or region" required>
+    </label>
+    {{end}}
+
+    <button class="button" type="submit">{{.SubmitLabel}}</button>
+  </form>
+</section>
+{{end}}
+
+{{define "auth"}}{{template "layout" .}}{{end}}
+
+

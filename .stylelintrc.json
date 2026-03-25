@@ -1,0 +1,14 @@
+{
+  "extends": ["stylelint-config-standard", "stylelint-config-html"],
+  "rules": {
+    "max-line-length": 100,
+    "selector-max-compound-selectors": 4,
+    "selector-max-attribute": 2,
+    "selector-max-class": 3,
+    "selector-max-pseudo-class": 2,
+    "selector-max-pseudo-element": 1,
+    "selector-max-id": 0,
+    "selector-max-type": 2,
+    "selector-max-universal": 1
+  }
+}
