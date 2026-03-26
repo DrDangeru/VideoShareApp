@@ -207,9 +207,9 @@ func seedData(db *sql.DB) error {
 			location:     "Sofia",
 		},
 		{
-			channelID:    3,
-			title:        "Bridge Railing Shadows",
-			description:  "Afternoon sun casting long railing shadows across a" +
+			channelID: 3,
+			title:     "Bridge Railing Shadows",
+			description: "Afternoon sun casting long railing shadows across a" +
 				" pedestrian bridge over water.",
 			mediaURL:     "/media/VID_20260313_170644.mp4",
 			thumbnailURL: "/media/VID_20260313_170644.jpg",
@@ -232,8 +232,8 @@ func seedData(db *sql.DB) error {
 			location:     "Sofia",
 		},
 		{
-			channelID:    5,
-			title:        "Waterfront Sculptures",
+			channelID: 5,
+			title:     "Waterfront Sculptures",
 			description: "An urban canal with white horse sculptures, weeping willows," +
 				" and apartment blocks.",
 			mediaURL:     "/media/VID_20260313_172627.mp4",
