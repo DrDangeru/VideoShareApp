@@ -42,9 +42,14 @@
         <textarea name="description" rows="4">{{.Form.Description}}</textarea>
       </label>
       
-      <label class="checkbox-label">
-        <input type="checkbox" name="is_public" value="1" {{if .Form.IsPublic}}checked{{end}}>
-        <span>Make video public</span>
+      <label class="checkbox-label" for="is_public">
+        <input type="checkbox" id="is_public" name="is_public" value="1" {{if .Form.IsPublic}}checked{{end}}>
+        Make Video Public
+      </label>
+
+      <label class="checkbox-label" for="allow_comments">
+        <input type="checkbox" id="allow_comments" name="allow_comments" value="1" {{if .Form.AllowComments}}checked{{end}}>
+        Allow Comments
       </label>
     </div>
     {{else}}

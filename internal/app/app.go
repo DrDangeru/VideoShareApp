@@ -65,4 +65,6 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/channels/", s.channelActionHandler)
 	s.mux.HandleFunc("/channel/", s.channelPageHandler)
 	s.mux.HandleFunc("/edit-channel/", s.editChannelHandler)
+	s.mux.HandleFunc("/add-comment", s.addCommentHandler)
+	s.mux.HandleFunc("/delete-comment/", s.deleteCommentHandler)
 }

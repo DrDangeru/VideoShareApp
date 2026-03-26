@@ -85,6 +85,16 @@ func initSchema(db *sql.DB) error {
 			update channels set location = 'Sofia' where location = 'Berlin';
 			update videos set location = 'Sofia' where location = 'Berlin';
 		`},
+		{16, `create table if not exists comments (
+			id integer primary key autoincrement,
+			video_id integer not null,
+			user_id integer not null,
+			content text not null,
+			created_at datetime default current_timestamp,
+			foreign key(video_id) references videos(id),
+			foreign key(user_id) references users(id)
+		)`},
+		{17, `alter table videos add column allow_comments integer default 1`},
 	}
 
 	// 3. Apply missing migrations

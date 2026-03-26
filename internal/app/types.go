@@ -32,6 +32,7 @@ type VideoView struct {
 	IsSubscribed  bool
 	IsPublic      bool
 	IsAdminLocked bool
+	AllowComments bool
 }
 
 type VideoEditForm struct {
@@ -40,6 +41,7 @@ type VideoEditForm struct {
 	Location      string
 	IsPublic      bool
 	IsAdminLocked bool
+	AllowComments bool
 }
 
 type Channel struct {
@@ -175,10 +177,20 @@ type EditChannelPageData struct {
 	IsOwner     bool
 }
 
+type Comment struct {
+	ID        int64
+	VideoID   int64
+	UserID    int64
+	Content   string
+	CreatedAt string
+	UserEmail string
+}
+
 type VideoPageData struct {
 	Title           string
 	CurrentUser     *User
 	Video           VideoView
+	Comments        []Comment
 	SimilarVideos   []SimilarVideo
 	SimilarChannels []SimilarChannel
 }

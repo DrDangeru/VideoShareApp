@@ -30,6 +30,60 @@
       <p class="watch-description">{{.Video.Description}}</p>
       {{end}}
     </div>
+
+    {{if .Video.AllowComments}}
+    <div class="comments-section">
+      <h3>Comments ({{len .Comments}})</h3>
+      
+      {{if .CurrentUser}}
+      <form action="/add-comment" method="post" class="comment-form form">
+        <input type="hidden" name="video_id" value="{{.Video.ID}}">
+        <label>
+          <textarea name="content" rows="2" placeholder="Add a comment..." required></textarea>
+        </label>
+        <div class="form-actions" style="justify-content: flex-start; margin-top: 8px;">
+          <button type="submit" class="button">Comment</button>
+        </div>
+      </form>
+      {{else}}
+      <div class="comment-login-prompt panel">
+        <p><a href="/login">Login</a> to add a comment.</p>
+      </div>
+      {{end}}
+
+      <div class="comments-list">
+        {{range .Comments}}
+        <div class="comment-item">
+          <div class="comment-avatar">
+            {{slice .UserEmail 0 1}}
+          </div>
+          <div class="comment-content-wrapper">
+            <div class="comment-header">
+              <strong>{{.UserEmail}}</strong>
+              <span class="muted">{{.CreatedAt}}</span>
+            </div>
+            <div class="comment-body">
+              {{.Content}}
+            </div>
+            {{if $.CurrentUser}}
+              {{if or (eq $.CurrentUser.ID .UserID) (eq $.CurrentUser.ID $.Video.ChannelID) $.CurrentUser.IsAdmin}}
+              <form action="/delete-comment/{{.ID}}" method="post" class="delete-comment-form">
+                <button type="submit" class="button secondary small" onclick="return confirm('Delete this comment?')">Delete</button>
+              </form>
+              {{end}}
+            {{end}}
+          </div>
+        </div>
+        {{else}}
+        <p class="muted">No comments yet. Be the first to comment!</p>
+        {{end}}
+      </div>
+    </div>
+    {{else}}
+    <div class="comments-section disabled panel">
+      <p class="text-center muted">Comments are turned off for this video.</p>
+    </div>
+    {{end}}
   </div>
 
   <aside class="watch-sidebar">

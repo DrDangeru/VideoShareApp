@@ -116,20 +116,28 @@ func (s *Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	title := strings.TrimSpace(r.FormValue("title"))
 	if title == "" {
-		title = "Untitled Video"
+		http.Error(w, "Title is required", http.StatusBadRequest)
+		return
 	}
+
 	description := r.FormValue("description")
-	isPublic := r.FormValue("is_public") == "1"
-	thumbnailBase64 := r.FormValue("thumbnail")
+	isPublic := r.FormValue("is_public") == "on"
+	allowComments := r.FormValue("allow_comments") == "on"
+
 	isPublicInt := 0
 	if isPublic {
 		isPublicInt = 1
 	}
 
+	allowCommentsInt := 0
+	if allowComments {
+		allowCommentsInt = 1
+	}
+
 	res, err := s.db.Exec(`insert into videos(channel_id, title, description,
-		media_url, thumbnail_url, location, user_id, is_public)
-		values(?, ?, ?, ?, ?, ?, ?, ?)`,
-		channelID, title, description, "", "", user.Location, channelOwnerID, isPublicInt)
+		media_url, thumbnail_url, location, user_id, is_public, allow_comments)
+		values(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		channelID, title, description, "", "", user.Location, channelOwnerID, isPublicInt, allowCommentsInt)
 	if err != nil {
 		s.serverError(w, err)
 		return
@@ -173,15 +181,16 @@ func (s *Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	mediaURL := "/" + filepath.ToSlash(videoPath)
 
 	thumbnailURL := "/static/img/placeholder.svg"
+	thumbnailBase64 := r.FormValue("thumbnail_base64")
 	if thumbnailBase64 != "" {
-		b64data := thumbnailBase64
-		if idx := strings.Index(thumbnailBase64, ","); idx != -1 {
-			b64data = thumbnailBase64[idx+1:]
-		}
-		if imgBytes, err := base64.StdEncoding.DecodeString(b64data); err == nil {
-			thumbPath := filepath.Join(videoDir, "original.jpg")
-			if err := os.WriteFile(thumbPath, imgBytes, 0644); err == nil {
-				thumbnailURL = "/" + filepath.ToSlash(thumbPath)
+		parts := strings.Split(thumbnailBase64, ",")
+		if len(parts) == 2 {
+			imgBytes, err := base64.StdEncoding.DecodeString(parts[1])
+			if err == nil {
+				thumbPath := filepath.Join(videoDir, "original.jpg")
+				if err := os.WriteFile(thumbPath, imgBytes, 0644); err == nil {
+					thumbnailURL = "/" + filepath.ToSlash(thumbPath)
+				}
 			}
 		}
 	}
@@ -257,6 +266,7 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 			Location:      video.Location,
 			IsPublic:      video.IsPublic,
 			IsAdminLocked: video.IsAdminLocked,
+			AllowComments: video.AllowComments,
 		}
 
 		if video.Title == "Draft Video" {
@@ -302,60 +312,77 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if isOwner {
+			var dbLocation string
+			var dbIsAdminLocked bool
+			s.db.QueryRow(`select location, is_admin_locked from videos where id = ?`, videoID).Scan(&dbLocation, &dbIsAdminLocked)
+			
 			title := r.FormValue("title")
 			description := r.FormValue("description")
+			location := dbLocation
+			if r.FormValue("location") != "" {
+				location = r.FormValue("location")
+			}
 			isPublic := r.FormValue("is_public") == "1"
-			thumbnailBase64 := r.FormValue("thumbnail")
+			allowComments := r.FormValue("allow_comments") == "1"
+			isAdminLocked := dbIsAdminLocked
+			if user.IsAdmin {
+				isAdminLocked = r.FormValue("is_admin_locked") == "1"
+			}
 
 			isPublicInt := 0
 			if isPublic {
 				isPublicInt = 1
 			}
 
+			allowCommentsInt := 0
+			if allowComments {
+				allowCommentsInt = 1
+			}
+
 			var thumbnailURL string
+			thumbnailBase64 := r.FormValue("thumbnail")
 			if thumbnailBase64 != "" {
-				b64data := thumbnailBase64
-				if idx := strings.Index(thumbnailBase64, ","); idx != -1 {
-					b64data = thumbnailBase64[idx+1:]
-				}
+				parts := strings.Split(thumbnailBase64, ",")
+				if len(parts) == 2 {
+					imgBytes, err := base64.StdEncoding.DecodeString(parts[1])
+					if err == nil {
+						thumbPath := filepath.Join(filepath.Dir(strings.TrimPrefix(mediaURL, "/")), "original.jpg")
 
-				imgBytes, err := base64.StdEncoding.DecodeString(b64data)
-				if err == nil {
-					thumbPath := filepath.Join(filepath.Dir(strings.TrimPrefix(mediaURL, "/")), "original.jpg")
-
-					if mkErr := os.MkdirAll(filepath.Dir(thumbPath), 0755); mkErr != nil {
-						log.Println("thumbnail dir error:", mkErr)
-					} else if err = os.WriteFile(thumbPath, imgBytes, 0644); err == nil {
-						thumbnailURL = "/" + filepath.ToSlash(thumbPath)
+						if mkErr := os.MkdirAll(filepath.Dir(thumbPath), 0755); mkErr != nil {
+							log.Println("thumbnail dir error:", mkErr)
+						} else if err = os.WriteFile(thumbPath, imgBytes, 0644); err == nil {
+							thumbnailURL = "/" + filepath.ToSlash(thumbPath)
+						}
 					}
 				}
 			}
 
 			if thumbnailURL != "" {
-				_, err = s.db.Exec(
-					`update videos set
-						title = ?, description = ?, is_public = ?, thumbnail_url = ?
-					where id = ?`,
-					title,
-					description,
-					isPublicInt,
-					thumbnailURL,
-					videoID,
-				)
+				if user.IsAdmin {
+					isAdminLockedInt := 0
+					if isAdminLocked {
+						isAdminLockedInt = 1
+					}
+					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, is_admin_locked = ?, allow_comments = ?, thumbnail_url = ? where id = ?`,
+						title, description, location, isPublicInt, isAdminLockedInt, allowCommentsInt, thumbnailURL, videoID)
+				} else {
+					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, allow_comments = ?, thumbnail_url = ? where id = ?`,
+						title, description, location, isPublicInt, allowCommentsInt, thumbnailURL, videoID)
+				}
 			} else {
-				_, err = s.db.Exec(
-					`update videos set title = ?, description = ?, is_public = ? where id = ?`,
-					title,
-					description,
-					isPublicInt,
-					videoID,
-				)
+				if user.IsAdmin {
+					isAdminLockedInt := 0
+					if isAdminLocked {
+						isAdminLockedInt = 1
+					}
+					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, is_admin_locked = ?, allow_comments = ? where id = ?`,
+						title, description, location, isPublicInt, isAdminLockedInt, allowCommentsInt, videoID)
+				} else {
+					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, allow_comments = ? where id = ?`,
+						title, description, location, isPublicInt, allowCommentsInt, videoID)
+				}
 			}
 
-			if err != nil {
-				s.serverError(w, err)
-				return
-			}
 		}
 
 		if user.IsAdmin {
@@ -397,12 +424,11 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 
 	user, _ := s.currentUser(r)
 
-	var video VideoView
 	var row *sql.Row
 	if user != nil && user.IsAdmin {
 		row = s.db.QueryRow(`
 			select v.id, v.channel_id, v.title, v.description, v.media_url, v.thumbnail_url,
-				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked
+				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments
 			from videos v join channels c on c.id = v.channel_id
 			where v.id = ?
 		`, videoID)
@@ -412,36 +438,25 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 				v.location, c.name,
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
-				v.is_public, v.is_admin_locked
+				v.is_public, v.is_admin_locked, v.allow_comments
 			from videos v join channels c on c.id = v.channel_id
-			where v.id = ?
-				and (
-					(v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0)
-					or c.user_id = ?
-				)
+			where v.id = ? and (
+				v.is_public = 1 or v.user_id = ?
+			) and (v.is_admin_locked = 0 and c.is_admin_locked = 0)
 		`, user.ID, user.ID, videoID, user.ID)
 	} else {
 		row = s.db.QueryRow(`
 			select v.id, v.channel_id, v.title, v.description, v.media_url, v.thumbnail_url,
-				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked
+				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments
 			from videos v join channels c on c.id = v.channel_id
 			where v.id = ? and v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0
 		`, videoID)
 	}
 
+	var video VideoView
 	err = row.Scan(
-		&video.ID,
-		&video.ChannelID,
-		&video.Title,
-		&video.Description,
-		&video.MediaURL,
-		&video.ThumbnailURL,
-		&video.Location,
-		&video.ChannelName,
-		&video.IsFavorite,
-		&video.IsSubscribed,
-		&video.IsPublic,
-		&video.IsAdminLocked,
+		&video.ID, &video.ChannelID, &video.Title, &video.Description, &video.MediaURL, &video.ThumbnailURL,
+		&video.Location, &video.ChannelName, &video.IsFavorite, &video.IsSubscribed, &video.IsPublic, &video.IsAdminLocked, &video.AllowComments,
 	)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
@@ -463,15 +478,139 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var comments []Comment
+	if video.AllowComments {
+		comments, err = s.loadComments(video.ID)
+		if err != nil {
+			s.serverError(w, err)
+			return
+		}
+	}
+
 	data := VideoPageData{
 		Title:           video.Title,
 		CurrentUser:     user,
 		Video:           video,
 		SimilarVideos:   similarVideos,
 		SimilarChannels: similarChannels,
+		Comments:        comments,
 	}
 
 	if err := s.renderPage(w, "watch.html", "watch", data); err != nil {
 		s.serverError(w, err)
 	}
+}
+
+func (s *Server) addCommentHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := s.requireUser(r)
+	if err != nil {
+		s.renderAuth(w, AuthPageData{
+			Title:       "Login to Comment",
+			Heading:     "Login",
+			Action:      "/login",
+			SubmitLabel: "Login",
+		})
+		return
+	}
+
+	videoIDStr := r.FormValue("video_id")
+	videoID, err := strconv.ParseInt(videoIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid video ID", http.StatusBadRequest)
+		return
+	}
+
+	content := strings.TrimSpace(r.FormValue("content"))
+	if content == "" {
+		http.Error(w, "Comment cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	var allowComments int
+	err = s.db.QueryRow(`select allow_comments from videos where id = ?`, videoID).Scan(&allowComments)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Video not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		s.serverError(w, err)
+		return
+	}
+
+	if allowComments == 0 {
+		http.Error(w, "Comments are disabled for this video", http.StatusForbidden)
+		return
+	}
+
+	_, err = s.db.Exec(`insert into comments(video_id, user_id, content) values(?, ?, ?)`, videoID, user.ID, content)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/watch/%d", videoID), http.StatusSeeOther)
+}
+
+func (s *Server) deleteCommentHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, err := s.requireUser(r)
+	if err != nil {
+		s.renderAuth(w, AuthPageData{
+			Title:       "Login to Comment",
+			Heading:     "Login",
+			Action:      "/login",
+			SubmitLabel: "Login",
+		})
+		return
+	}
+
+	commentIDStr := strings.TrimPrefix(r.URL.Path, "/delete-comment/")
+	commentID, err := strconv.ParseInt(commentIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid comment ID", http.StatusBadRequest)
+		return
+	}
+
+	var commentOwnerID int64
+	var videoID int64
+	err = s.db.QueryRow(`select user_id, video_id from comments where id = ?`, commentID).Scan(&commentOwnerID, &videoID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Comment not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		s.serverError(w, err)
+		return
+	}
+
+	var channelOwnerID int64
+	err = s.db.QueryRow(`
+		select c.owner_user_id 
+		from channels c 
+		join videos v on v.channel_id = c.id 
+		where v.id = ?`, videoID).Scan(&channelOwnerID)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+
+	if user.ID != commentOwnerID && user.ID != channelOwnerID && !user.IsAdmin {
+		http.Error(w, "You don't have permission to delete this comment", http.StatusForbidden)
+		return
+	}
+
+	_, err = s.db.Exec(`delete from comments where id = ?`, commentID)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/watch/%d", videoID), http.StatusSeeOther)
 }

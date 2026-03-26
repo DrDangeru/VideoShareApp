@@ -294,7 +294,8 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 			0,
 			0,
 			v.is_public,
-			v.is_admin_locked
+			v.is_admin_locked,
+			v.allow_comments
 		from videos v
 		join channels c on c.id = v.channel_id
 		where v.is_public = 1 and v.is_admin_locked = 0
@@ -314,7 +315,8 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
 				v.is_public,
-				v.is_admin_locked
+				v.is_admin_locked,
+				v.allow_comments
 			from videos v
 			join channels c on c.id = v.channel_id
 			order by case when v.location = ? then 0 else 1 end, v.id desc
@@ -334,7 +336,8 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
 				v.is_public,
-				v.is_admin_locked
+				v.is_admin_locked,
+				v.allow_comments
 			from videos v
 			join channels c on c.id = v.channel_id
 			where v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0
@@ -355,7 +358,8 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 				0,
 				0,
 				v.is_public,
-				v.is_admin_locked
+				v.is_admin_locked,
+				v.allow_comments
 			from videos v
 			join channels c on c.id = v.channel_id
 			where v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0
@@ -385,6 +389,7 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 			&item.IsSubscribed,
 			&item.IsPublic,
 			&item.IsAdminLocked,
+			&item.AllowComments,
 		)
 		if err != nil {
 			return nil, err
@@ -409,7 +414,8 @@ func (s *Server) loadUserVideos(user *User) ([]VideoView, error) {
 			0,
 			0,
 			v.is_public,
-			v.is_admin_locked
+			v.is_admin_locked,
+			v.allow_comments
 		from videos v
 		join channels c on c.id = v.channel_id
 		where c.user_id = ?
@@ -439,6 +445,7 @@ func (s *Server) loadUserVideos(user *User) ([]VideoView, error) {
 			&item.IsSubscribed,
 			&item.IsPublic,
 			&item.IsAdminLocked,
+			&item.AllowComments,
 		)
 		if err != nil {
 			return nil, err
@@ -467,4 +474,28 @@ func (s *Server) loadManageableChannels(user *User) ([]Channel, error) {
 		channels = append(channels, ch)
 	}
 	return channels, rows.Err()
+}
+
+func (s *Server) loadComments(videoID int64) ([]Comment, error) {
+	rows, err := s.db.Query(`
+		select c.id, c.video_id, c.user_id, c.content, c.created_at, u.email
+		from comments c
+		join users u on u.id = c.user_id
+		where c.video_id = ?
+		order by c.created_at desc
+	`, videoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []Comment
+	for rows.Next() {
+		var c Comment
+		if err := rows.Scan(&c.ID, &c.VideoID, &c.UserID, &c.Content, &c.CreatedAt, &c.UserEmail); err != nil {
+			return nil, err
+		}
+		comments = append(comments, c)
+	}
+	return comments, rows.Err()
 }
