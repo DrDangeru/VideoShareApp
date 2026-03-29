@@ -15,6 +15,38 @@
     if (localStorage.getItem('theme') === 'light') {
       document.documentElement.classList.add('theme-light');
     }
+
+    // Banner Ad Logic
+    document.addEventListener('DOMContentLoaded', () => {
+      const bannerAds = [
+        { 
+          url: "https://example.com/ad1", 
+          img: "https://via.placeholder.com/300x100.png?text=Special+Offer+1" 
+        },
+        { 
+          url: "https://example.com/ad2", 
+          img: "https://via.placeholder.com/300x100.png?text=Special+Offer+2" 
+        },
+        { 
+          url: "https://example.com/ad3", 
+          img: "https://via.placeholder.com/300x100.png?text=Special+Offer+3" 
+        }
+      ];
+
+      // 50% chance to show a banner ad
+      if (Math.random() > 0.5) {
+        const ad = bannerAds[Math.floor(Math.random() * bannerAds.length)];
+        const bannerContainer = document.querySelector('.banner-ad-content');
+        const bannerLink = document.getElementById('banner-ad-link');
+        const bannerImg = document.getElementById('banner-ad-img');
+
+        if (bannerContainer && bannerLink && bannerImg) {
+          bannerLink.href = ad.url;
+          bannerImg.src = ad.img;
+          bannerContainer.classList.add('active');
+        }
+      }
+    });
   </script>
 </head>
 <body>
@@ -23,10 +55,12 @@
       <a class="brand" href="/">VideoShareApp</a>
       <nav class="nav">
         <button onclick="toggleTheme()" class="theme-toggle" title="Toggle light/dark mode">
-          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="icon-moon">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" 
+               fill="none" stroke-linecap="round" stroke-linejoin="round" class="icon-moon">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
           </svg>
-          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="icon-sun">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" 
+               fill="none" stroke-linecap="round" stroke-linejoin="round" class="icon-sun">
             <circle cx="12" cy="12" r="5"></circle>
             <line x1="12" y1="1" x2="12" y2="3"></line>
             <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -49,6 +83,18 @@
       </nav>
     </div>
   </header>
+
+  <!-- Banner Ad Section -->
+  <div class="wrap banner-ad-container" id="banner-ad">
+    <!-- Ad content will be injected here or hardcoded -->
+    <div class="banner-ad-content">
+      <span class="ad-badge">Ad</span>
+      <a href="https://example.com/ad-click" target="_blank" id="banner-ad-link">
+        <img src="/static/img/banner-placeholder.png" alt="Advertisement" id="banner-ad-img" 
+             style="max-width: 100%; height: auto; border-radius: 8px;">
+      </a>
+    </div>
+  </div>
 
   <main class="wrap main-content">
     {{template "page_content" .}}

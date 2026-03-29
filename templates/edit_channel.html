@@ -14,17 +14,16 @@
       <p class="muted help-text text-center">Select an image to use as your channel avatar.</p>
       
       <div class="avatar-upload-wrapper">
-        <input type="file" id="avatar-upload" accept="image/*" class="hidden">
-        <button type="button" class="button secondary" onclick="document.getElementById('avatar-upload').click()">Upload Image</button>
-        
-        <input type="hidden" name="avatar" id="avatar-data">
-        <div class="avatar-preview-container">
-          {{if .Channel.AvatarURL}}
-            <img id="avatar-preview" src="{{.Channel.AvatarURL}}" class="avatar-preview block">
-          {{else}}
-            <img id="avatar-preview" src="" class="avatar-preview hidden">
-          {{end}}
+        <div class="avatar-upload-actions">
+          <button type="button" class="button secondary" 
+                  onclick="document.getElementById('avatar-upload').click()">Upload Image</button>
+          <button type="button" class="button secondary danger" 
+                  onclick="clearAvatar()">Remove Image</button>
         </div>
+        <input type="file" id="avatar-upload" accept="image/jpeg,image/png,image/webp" 
+               style="display:none;" onchange="handleAvatarSelect(event)">
+        <input type="hidden" name="avatar_base64" id="avatar-base64">
+        <input type="hidden" name="remove_avatar" id="remove-avatar" value="0">
       </div>
     </div>
 

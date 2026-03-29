@@ -30,7 +30,8 @@
       <h3>2. Video &amp; Thumbnail</h3>
       <label>
         <span>Video File (MP4, WebM, MOV)</span>
-        <input type="file" name="video" id="video-file" accept="video/mp4,video/webm,video/quicktime" required>
+        <input type="file" name="video_file" id="video-file" 
+               accept="video/mp4,video/webm,video/quicktime" required>
       </label>
 
       <video id="vid-preview" controls class="video-preview hidden"></video>
@@ -85,12 +86,12 @@
       <a href="/watch/{{.ID}}" class="video-title-link"><h3>{{.Title}}</h3></a>
       <p class="muted">{{.ChannelName}} · {{.Location}}</p>
       <p>{{.Description}}</p>
-      <div class="actions">
-        {{if .IsPublic}}
-          <span class="button secondary">Public</span>
-        {{else}}
-          <span class="button secondary private-badge">Private</span>
-        {{end}}
+      <div class="video-actions">
+        <form method="post" action="/videos/{{.ID}}/favorite" style="display:inline;">
+          <button class="button" type="submit">
+            {{if .IsFavorite}}Favorited{{else}}Favorite{{end}}
+          </button>
+        </form>
         <a href="/edit-video/{{.ID}}" class="button secondary">Edit</a>
       </div>
     </div>
@@ -126,7 +127,10 @@
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#1f1f1f';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const scale = Math.min(canvas.width / vidPreview.videoWidth, canvas.height / vidPreview.videoHeight);
+    const scale = Math.min(
+      canvas.width / vidPreview.videoWidth, 
+      canvas.height / vidPreview.videoHeight
+    );
     const w = vidPreview.videoWidth * scale;
     const h = vidPreview.videoHeight * scale;
     const x = (canvas.width - w) / 2;

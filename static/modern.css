@@ -169,6 +169,45 @@ body {
 .theme-light .icon-moon { display: none; }
 .theme-light .icon-sun { display: block; }
 
+/* Banner Ad Section */
+.banner-ad-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  margin-bottom: -16px; /* pull up content below */
+  position: relative;
+  z-index: 50;
+}
+
+.banner-ad-content {
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  max-width: 300px;
+  display: none; /* Hidden by default until we inject an ad via js or it's active */
+}
+
+/* For demo purposes, we will make it block so we can see the placeholder */
+.banner-ad-content.active {
+  display: block;
+}
+
+.ad-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+  z-index: 2;
+}
+
 .nav-text, .muted {
   color: var(--text-muted);
   font-size: 0.9rem;

@@ -12,14 +12,18 @@
     <p class="channel-description">{{.Channel.Description}}</p>
     {{end}}
     {{if .CurrentUser}}
-    <div class="actions channel-actions">
-      <form method="post" action="/channels/{{.Channel.ID}}/subscribe">
-        <button class="button" type="submit">{{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}</button>
-      </form>
-      {{if or .CurrentUser.IsAdmin (eq .Channel.OwnerUserID .CurrentUser.ID)}}
-        <a href="/edit-channel/{{.Channel.ID}}" class="button secondary">Edit / Lock Channel</a>
-      {{end}}
-    </div>
+      <div class="channel-header-actions">
+        {{if $.CurrentUser}}
+        <form method="post" action="/channels/{{.Channel.ID}}/subscribe">
+          <button class="button" type="submit">
+            {{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}
+          </button>
+        </form>
+        {{if or $.CurrentUser.IsAdmin (eq $.CurrentUser.ID .Channel.OwnerUserID)}}
+          <a href="/edit-channel/{{.Channel.ID}}" class="button secondary">Edit Channel</a>
+        {{end}}
+        {{end}}
+      </div>
     {{end}}
   </div>
 </section>
@@ -39,10 +43,15 @@
       <p class="muted">{{.Location}}</p>
       <p>{{.Description}}</p>
       {{if $.CurrentUser}}
-      <div class="actions">
-        <form method="post" action="/videos/{{.ID}}/favorite">
-          <button class="button" type="submit">{{if .IsFavorite}}Favorited{{else}}Favorite{{end}}</button>
+      <div class="video-actions">
+        {{if $.CurrentUser}}
+        <form method="post" action="/videos/{{.ID}}/favorite" style="display:inline;">
+          <input type="hidden" name="return_to" value="/channel/{{$.Channel.ID}}">
+          <button class="button" type="submit">
+            {{if .IsFavorite}}Favorited{{else}}Favorite{{end}}
+          </button>
         </form>
+        {{end}}
         {{if $.CurrentUser.IsAdmin}}
           <a href="/edit-video/{{.ID}}" class="button secondary">Edit / Lock</a>
         {{end}}

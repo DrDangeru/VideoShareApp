@@ -2,9 +2,39 @@
 <section class="watch-layout">
 
   <div class="watch-main">
-    <div class="watch-player">
-      <video controls autoplay preload="auto" poster="{{.Video.ThumbnailURL}}">
+    <div class="video-player-container panel" 
+         style="position: relative; padding: 0; overflow: hidden; background: #000;">
+      
+      <!-- Pre-roll Ad Overlay -->
+      <div id="preroll-ad-overlay" style="
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0,0,0,0.9);
+        color: white;
+      ">
+        <h2 style="margin-bottom: 1rem;">Advertisement</h2>
+        <video id="preroll-video" width="100%" height="auto" 
+               style="max-height: 80%;" muted playsinline></video>
+        <div style="margin-top: 1rem; font-weight: bold;">
+          Video will play in <span id="ad-countdown">5</span> seconds...
+        </div>
+        <button id="skip-ad-btn" class="button secondary" 
+                style="margin-top: 1rem; display: none;">Skip Ad</button>
+      </div>
+
+      <video id="main-video" controls width="100%" 
+             style="display: block; border-radius: 12px 12px 0 0;" 
+             poster="{{.Video.ThumbnailURL}}">
         <source src="{{.Video.MediaURL}}" type="video/mp4">
+        Your browser does not support the video tag.
       </video>
     </div>
 
@@ -15,10 +45,14 @@
       {{if $.CurrentUser}}
       <div class="actions watch-actions">
         <form method="post" action="/videos/{{.Video.ID}}/favorite">
-          <button class="button" type="submit">{{if .Video.IsFavorite}}Favorited{{else}}Favorite{{end}}</button>
+          <button class="button" type="submit">
+            {{if .Video.IsFavorite}}Favorited{{else}}Favorite{{end}}
+          </button>
         </form>
         <form method="post" action="/channels/{{.Video.ChannelID}}/subscribe">
-          <button class="button secondary" type="submit">{{if .Video.IsSubscribed}}Subscribed{{else}}Subscribe{{end}}</button>
+          <button class="button secondary" type="submit">
+            {{if .Video.IsSubscribed}}Subscribed{{else}}Subscribe{{end}}
+          </button>
         </form>
         {{if or $.CurrentUser.IsAdmin (eq .Video.ChannelID $.CurrentUser.ID)}}
           <a href="/edit-video/{{.Video.ID}}" class="button secondary">Edit / Lock</a>
@@ -66,9 +100,13 @@
               {{.Content}}
             </div>
             {{if $.CurrentUser}}
-              {{if or (eq $.CurrentUser.ID .UserID) (eq $.CurrentUser.ID $.Video.ChannelID) $.CurrentUser.IsAdmin}}
+              {{if or (eq $.CurrentUser.ID .UserID) (eq $.CurrentUser.ID $.Video.ChannelID) 
+              $.CurrentUser.IsAdmin}}
               <form action="/delete-comment/{{.ID}}" method="post" class="delete-comment-form">
-                <button type="submit" class="button secondary small" onclick="return confirm('Delete this comment?')">Delete</button>
+                <button type="submit" class="button secondary small" 
+                        onclick="return confirm('Delete this comment?')">
+                  Delete
+                </button>
               </form>
               {{end}}
             {{end}}
@@ -146,6 +184,8 @@
 
   </aside>
 </section>
+
+<script src="/static/preroll.js"></script>
 {{end}}
 
 {{define "watch"}}{{template "layout" .}}{{end}}
