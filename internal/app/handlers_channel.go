@@ -73,7 +73,7 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 				v.media_url, v.thumbnail_url, v.location, c.name,
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				?,
-				v.is_public, v.is_admin_locked
+				v.is_public, v.is_admin_locked, v.allow_comments, v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.channel_id = ?
 			order by v.id desc
@@ -86,7 +86,7 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 				v.media_url, v.thumbnail_url, v.location, c.name,
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				?,
-				v.is_public, v.is_admin_locked
+				v.is_public, v.is_admin_locked, v.allow_comments, v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.channel_id = ? and (v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0)
 			order by v.id desc
@@ -97,7 +97,7 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 			select
 				v.id, v.channel_id, v.title, v.description,
 				v.media_url, v.thumbnail_url, v.location, c.name,
-				0, 0, v.is_public, v.is_admin_locked
+				0, 0, v.is_public, v.is_admin_locked, 1, 0
 			from videos v join channels c on c.id = v.channel_id
 			where v.channel_id = ? and v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0
 			order by v.id desc
@@ -128,6 +128,8 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 			&item.IsSubscribed,
 			&item.IsPublic,
 			&item.IsAdminLocked,
+			&item.AllowComments,
+			&item.MadeForKids,
 		)
 		if err != nil {
 			s.serverError(w, err)
@@ -342,7 +344,13 @@ func (s *Server) channelActionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) != 3 || parts[0] != "channels" || parts[2] != "subscribe" {
+	if len(parts) != 3 || parts[0] != "channels" {
+		http.NotFound(w, r)
+		return
+	}
+
+	action := parts[2]
+	if action != "subscribe" && action != "notify" {
 		http.NotFound(w, r)
 		return
 	}
@@ -353,11 +361,20 @@ func (s *Server) channelActionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = s.db.Exec(
-		`insert or ignore into subscriptions(user_id, channel_id) values(?, ?)`,
-		user.ID,
-		channelID,
-	)
+	if action == "subscribe" {
+		_, err = s.db.Exec(
+			`insert or ignore into subscriptions(user_id, channel_id) values(?, ?)`,
+			user.ID,
+			channelID,
+		)
+	} else {
+		// Toggle notify: flip 0<->1
+		_, err = s.db.Exec(
+			`update subscriptions set notify = case when notify = 1 then 0 else 1 end where user_id = ? and channel_id = ?`,
+			user.ID,
+			channelID,
+		)
+	}
 	if err != nil {
 		s.serverError(w, err)
 		return

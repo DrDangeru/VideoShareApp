@@ -95,6 +95,8 @@ func initSchema(db *sql.DB) error {
 			foreign key(user_id) references users(id)
 		)`},
 		{17, `alter table videos add column allow_comments integer default 1`},
+		{18, `alter table videos add column made_for_kids integer default 0`},
+		{19, `alter table subscriptions add column notify integer default 0`},
 	}
 
 	// 3. Apply missing migrations

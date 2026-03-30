@@ -41,6 +41,9 @@
     <div class="watch-info panel">
       <h1 class="watch-title">{{.Video.Title}}</h1>
       <p class="muted watch-meta">{{.Video.ChannelName}} &middot; {{.Video.Location}}</p>
+      {{if .Video.MadeForKids}}
+        <span class="badge-kids">Kids</span>
+      {{end}}
 
       {{if $.CurrentUser}}
       <div class="actions watch-actions">

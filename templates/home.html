@@ -50,9 +50,21 @@
               <p class="muted sidebar-channel-location">{{.Location}}</p>
               <p>{{.LatestVideoTitle}}</p>
             </div>
-            <form method="post" action="/channels/{{.ChannelID}}/subscribe">
-              <button class="button secondary" type="submit">Subscribed</button>
-            </form>
+            <div class="sidebar-item-actions">
+              <form method="post"
+                action="/channels/{{.ChannelID}}/subscribe">
+                <button class="button secondary"
+                  type="submit">Subscribed</button>
+              </form>
+              <form method="post"
+                action="/channels/{{.ChannelID}}/notify">
+                <button class="btn-notify{{if .Notify}} active{{end}}"
+                  type="submit"
+                  title="{{if .Notify}}Notifications on{{else}}Notifications off{{end}}">
+                  &#128276;
+                </button>
+              </form>
+            </div>
           </article>
           {{else}}
           <p>No subscribed channels yet.</p>
@@ -120,6 +132,9 @@
           · {{.Location}}
         </p>
         <p>{{.Description}}</p>
+        {{if .MadeForKids}}
+          <span class="badge-kids">Kids</span>
+        {{end}}
         {{if $.CurrentUser}}
         <div class="actions">
           <form method="post" action="/channels/{{.ChannelID}}/subscribe">

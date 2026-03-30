@@ -42,6 +42,9 @@
       <a href="/watch/{{.ID}}" class="video-title-link"><h3>{{.Title}}</h3></a>
       <p class="muted">{{.Location}}</p>
       <p>{{.Description}}</p>
+      {{if .MadeForKids}}
+        <span class="badge-kids">Kids</span>
+      {{end}}
       {{if $.CurrentUser}}
       <div class="video-actions">
         {{if $.CurrentUser.IsAdmin}}

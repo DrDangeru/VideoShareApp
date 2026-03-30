@@ -51,6 +51,12 @@
         <input type="checkbox" id="allow_comments" name="allow_comments" value="1" {{if .Form.AllowComments}}checked{{end}}>
         Allow Comments
       </label>
+
+      <label class="checkbox-label" for="made_for_kids">
+        <input type="checkbox" id="made_for_kids" name="made_for_kids"
+          value="1" {{if .Form.MadeForKids}}checked{{end}}>
+        Made for Kids
+      </label>
     </div>
     {{else}}
     <div class="form-group">

@@ -123,6 +123,7 @@ func (s *Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	description := r.FormValue("description")
 	isPublic := r.FormValue("is_public") == "on"
 	allowComments := r.FormValue("allow_comments") == "on"
+	madeForKids := r.FormValue("made_for_kids") == "on"
 
 	isPublicInt := 0
 	if isPublic {
@@ -134,10 +135,15 @@ func (s *Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		allowCommentsInt = 1
 	}
 
+	madeForKidsInt := 0
+	if madeForKids {
+		madeForKidsInt = 1
+	}
+
 	res, err := s.db.Exec(`insert into videos(channel_id, title, description,
-		media_url, thumbnail_url, location, user_id, is_public, allow_comments)
-		values(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		channelID, title, description, "", "", user.Location, channelOwnerID, isPublicInt, allowCommentsInt)
+		media_url, thumbnail_url, location, user_id, is_public, allow_comments, made_for_kids)
+		values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		channelID, title, description, "", "", user.Location, channelOwnerID, isPublicInt, allowCommentsInt, madeForKidsInt)
 	if err != nil {
 		s.serverError(w, err)
 		return
@@ -230,7 +236,8 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 		row := s.db.QueryRow(`
 			select
 				v.id, v.title, v.description, v.media_url,
-				v.thumbnail_url, v.is_public, v.is_admin_locked, c.user_id
+				v.thumbnail_url, v.is_public, v.is_admin_locked,
+				v.allow_comments, v.made_for_kids, c.user_id
 			from videos v
 			join channels c on c.id = v.channel_id
 			where v.id = ?
@@ -243,6 +250,8 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 			&video.ThumbnailURL,
 			&video.IsPublic,
 			&video.IsAdminLocked,
+			&video.AllowComments,
+			&video.MadeForKids,
 			&channelOwnerID,
 		)
 
@@ -267,6 +276,7 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 			IsPublic:      video.IsPublic,
 			IsAdminLocked: video.IsAdminLocked,
 			AllowComments: video.AllowComments,
+			MadeForKids:   video.MadeForKids,
 		}
 
 		if video.Title == "Draft Video" {
@@ -315,7 +325,7 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 			var dbLocation string
 			var dbIsAdminLocked bool
 			s.db.QueryRow(`select location, is_admin_locked from videos where id = ?`, videoID).Scan(&dbLocation, &dbIsAdminLocked)
-			
+
 			title := r.FormValue("title")
 			description := r.FormValue("description")
 			location := dbLocation
@@ -324,6 +334,7 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			isPublic := r.FormValue("is_public") == "1"
 			allowComments := r.FormValue("allow_comments") == "1"
+			madeForKids := r.FormValue("made_for_kids") == "1"
 			isAdminLocked := dbIsAdminLocked
 			if user.IsAdmin {
 				isAdminLocked = r.FormValue("is_admin_locked") == "1"
@@ -337,6 +348,11 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 			allowCommentsInt := 0
 			if allowComments {
 				allowCommentsInt = 1
+			}
+
+			madeForKidsInt := 0
+			if madeForKids {
+				madeForKidsInt = 1
 			}
 
 			var thumbnailURL string
@@ -363,11 +379,14 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 					if isAdminLocked {
 						isAdminLockedInt = 1
 					}
-					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, is_admin_locked = ?, allow_comments = ?, thumbnail_url = ? where id = ?`,
-						title, description, location, isPublicInt, isAdminLockedInt, allowCommentsInt, thumbnailURL, videoID)
+					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, 
+					is_public = ?, is_admin_locked = ?, allow_comments = ?, made_for_kids = ?, 
+					thumbnail_url = ? where id = ?`,
+						title, description, location, isPublicInt, isAdminLockedInt, allowCommentsInt,
+						madeForKidsInt, thumbnailURL, videoID)
 				} else {
-					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, allow_comments = ?, thumbnail_url = ? where id = ?`,
-						title, description, location, isPublicInt, allowCommentsInt, thumbnailURL, videoID)
+					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, allow_comments = ?, made_for_kids = ?, thumbnail_url = ? where id = ?`,
+						title, description, location, isPublicInt, allowCommentsInt, madeForKidsInt, thumbnailURL, videoID)
 				}
 			} else {
 				if user.IsAdmin {
@@ -375,11 +394,11 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 					if isAdminLocked {
 						isAdminLockedInt = 1
 					}
-					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, is_admin_locked = ?, allow_comments = ? where id = ?`,
-						title, description, location, isPublicInt, isAdminLockedInt, allowCommentsInt, videoID)
+					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, is_admin_locked = ?, allow_comments = ?, made_for_kids = ? where id = ?`,
+						title, description, location, isPublicInt, isAdminLockedInt, allowCommentsInt, madeForKidsInt, videoID)
 				} else {
-					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, allow_comments = ? where id = ?`,
-						title, description, location, isPublicInt, allowCommentsInt, videoID)
+					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, allow_comments = ?, made_for_kids = ? where id = ?`,
+						title, description, location, isPublicInt, allowCommentsInt, madeForKidsInt, videoID)
 				}
 			}
 
@@ -428,7 +447,8 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 	if user != nil && user.IsAdmin {
 		row = s.db.QueryRow(`
 			select v.id, v.channel_id, v.title, v.description, v.media_url, v.thumbnail_url,
-				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments
+				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments,
+				v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id = ?
 		`, videoID)
@@ -438,7 +458,7 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 				v.location, c.name,
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
-				v.is_public, v.is_admin_locked, v.allow_comments
+				v.is_public, v.is_admin_locked, v.allow_comments, v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id = ? and (
 				v.is_public = 1 or v.user_id = ?
@@ -447,7 +467,8 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		row = s.db.QueryRow(`
 			select v.id, v.channel_id, v.title, v.description, v.media_url, v.thumbnail_url,
-				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments
+				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments,
+				v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id = ? and v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0
 		`, videoID)
@@ -456,7 +477,7 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 	var video VideoView
 	err = row.Scan(
 		&video.ID, &video.ChannelID, &video.Title, &video.Description, &video.MediaURL, &video.ThumbnailURL,
-		&video.Location, &video.ChannelName, &video.IsFavorite, &video.IsSubscribed, &video.IsPublic, &video.IsAdminLocked, &video.AllowComments,
+		&video.Location, &video.ChannelName, &video.IsFavorite, &video.IsSubscribed, &video.IsPublic, &video.IsAdminLocked, &video.AllowComments, &video.MadeForKids,
 	)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)

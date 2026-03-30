@@ -733,6 +733,53 @@ body {
   opacity: 0.8;
 }
 
+/* Kids Badge */
+.badge-kids {
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #ff6b9d, #c44dff);
+  border-radius: 12px;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* Notify Toggle */
+.btn-notify {
+  background: none;
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s;
+  color: var(--text-muted);
+  padding: 0;
+}
+.btn-notify:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+.btn-notify.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+
+/* Sidebar item actions row */
+.sidebar-item-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: auto;
+}
+
 /* Utility */
 .text-center { text-align: center; }
 .hidden { display: none !important; }

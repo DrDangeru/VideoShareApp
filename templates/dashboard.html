@@ -60,6 +60,14 @@
         <input type="checkbox" name="is_public" value="1" checked>
         <span>Make video public</span>
       </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="allow_comments" value="on" checked>
+        <span>Allow comments</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="made_for_kids" value="on">
+        <span>Made for kids</span>
+      </label>
     </div>
 
     <button class="button" type="submit">Upload Video</button>
@@ -86,6 +94,9 @@
       <a href="/watch/{{.ID}}" class="video-title-link"><h3>{{.Title}}</h3></a>
       <p class="muted">{{.ChannelName}} · {{.Location}}</p>
       <p>{{.Description}}</p>
+      {{if .MadeForKids}}
+        <span class="badge-kids">Kids</span>
+      {{end}}
       <div class="video-actions">
         <a href="/edit-video/{{.ID}}" class="button secondary">Edit</a>
       </div>

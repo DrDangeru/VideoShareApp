@@ -14,7 +14,7 @@ func (s *Server) loadSimilarVideos(
 				v.location, c.id, c.name,
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
-				v.is_public
+				v.is_public, v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id != ?
 				and (v.channel_id = ? or v.location = ?)
@@ -28,7 +28,7 @@ func (s *Server) loadSimilarVideos(
 				v.location, c.id, c.name,
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
-				v.is_public
+				v.is_public, v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id != ? and v.is_public = 1 and v.is_admin_locked = 0
 				and (v.channel_id = ? or v.location = ?)
@@ -39,7 +39,7 @@ func (s *Server) loadSimilarVideos(
 	} else {
 		query = `
 			select v.id, v.title, v.description, v.media_url, v.thumbnail_url,
-				v.location, c.id, c.name, 0, 0, v.is_public
+				v.location, c.id, c.name, 0, 0, v.is_public, v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id != ? and v.is_public = 1 and v.is_admin_locked = 0
 				and (v.channel_id = ? or v.location = ?)
@@ -70,6 +70,7 @@ func (s *Server) loadSimilarVideos(
 			&item.IsFavorite,
 			&item.IsSubscribed,
 			&item.IsPublic,
+			&item.MadeForKids,
 		)
 		if err != nil {
 			return nil, err
@@ -171,6 +172,7 @@ func (s *Server) loadChannelSidebar(user *User, subscribedOnly bool) ([]ChannelS
 			v.id,
 			v.title,
 			v.media_url,
+			0,
 			0
 		from channels c
 		join videos v on v.id = (
@@ -193,7 +195,8 @@ func (s *Server) loadChannelSidebar(user *User, subscribedOnly bool) ([]ChannelS
 					v.id,
 					v.title,
 					v.media_url,
-					exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id)
+					exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
+					coalesce((select s.notify from subscriptions s where s.user_id = ? and s.channel_id = c.id), 0)
 				from channels c
 				join videos v on v.id = (
 					select v2.id
@@ -203,7 +206,7 @@ func (s *Server) loadChannelSidebar(user *User, subscribedOnly bool) ([]ChannelS
 					limit 1
 				)
 			`
-			args = append(args, user.ID)
+			args = append(args, user.ID, user.ID)
 		} else {
 			query = `
 				select
@@ -214,7 +217,8 @@ func (s *Server) loadChannelSidebar(user *User, subscribedOnly bool) ([]ChannelS
 					v.id,
 					v.title,
 					v.media_url,
-					exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id)
+					exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
+					coalesce((select s.notify from subscriptions s where s.user_id = ? and s.channel_id = c.id), 0)
 				from channels c
 				join videos v on v.id = (
 					select v2.id
@@ -224,7 +228,7 @@ func (s *Server) loadChannelSidebar(user *User, subscribedOnly bool) ([]ChannelS
 					limit 1
 				)
 			`
-			args = append(args, user.ID)
+			args = append(args, user.ID, user.ID)
 		}
 	}
 
@@ -269,6 +273,7 @@ func (s *Server) loadChannelSidebar(user *User, subscribedOnly bool) ([]ChannelS
 			&item.LatestVideoTitle,
 			&item.LatestVideoURL,
 			&item.IsSubscribed,
+			&item.Notify,
 		)
 		if err != nil {
 			return nil, err
@@ -295,7 +300,8 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 			0,
 			v.is_public,
 			v.is_admin_locked,
-			v.allow_comments
+			v.allow_comments,
+			v.made_for_kids
 		from videos v
 		join channels c on c.id = v.channel_id
 		where v.is_public = 1 and v.is_admin_locked = 0
@@ -316,7 +322,8 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 				exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
 				v.is_public,
 				v.is_admin_locked,
-				v.allow_comments
+				v.allow_comments,
+				v.made_for_kids
 			from videos v
 			join channels c on c.id = v.channel_id
 			order by case when v.location = ? then 0 else 1 end, v.id desc
@@ -337,7 +344,8 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 				exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
 				v.is_public,
 				v.is_admin_locked,
-				v.allow_comments
+				v.allow_comments,
+				v.made_for_kids
 			from videos v
 			join channels c on c.id = v.channel_id
 			where v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0
@@ -359,7 +367,8 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 				0,
 				v.is_public,
 				v.is_admin_locked,
-				v.allow_comments
+				v.allow_comments,
+				v.made_for_kids
 			from videos v
 			join channels c on c.id = v.channel_id
 			where v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0
@@ -390,6 +399,7 @@ func (s *Server) loadFeed(user *User) ([]VideoView, error) {
 			&item.IsPublic,
 			&item.IsAdminLocked,
 			&item.AllowComments,
+			&item.MadeForKids,
 		)
 		if err != nil {
 			return nil, err
@@ -415,7 +425,8 @@ func (s *Server) loadUserVideos(user *User) ([]VideoView, error) {
 			0,
 			v.is_public,
 			v.is_admin_locked,
-			v.allow_comments
+			v.allow_comments,
+			v.made_for_kids
 		from videos v
 		join channels c on c.id = v.channel_id
 		where c.user_id = ?
@@ -446,6 +457,7 @@ func (s *Server) loadUserVideos(user *User) ([]VideoView, error) {
 			&item.IsPublic,
 			&item.IsAdminLocked,
 			&item.AllowComments,
+			&item.MadeForKids,
 		)
 		if err != nil {
 			return nil, err

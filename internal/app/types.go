@@ -33,6 +33,7 @@ type VideoView struct {
 	IsPublic      bool
 	IsAdminLocked bool
 	AllowComments bool
+	MadeForKids   bool
 }
 
 type VideoEditForm struct {
@@ -42,6 +43,7 @@ type VideoEditForm struct {
 	IsPublic      bool
 	IsAdminLocked bool
 	AllowComments bool
+	MadeForKids   bool
 }
 
 type Channel struct {
@@ -85,6 +87,7 @@ type SimilarVideo struct {
 	IsFavorite   bool
 	IsSubscribed bool
 	IsPublic     bool
+	MadeForKids  bool
 }
 
 type SimilarChannel struct {
@@ -121,6 +124,7 @@ type ChannelSidebarItem struct {
 	LatestVideoTitle string
 	LatestVideoURL   string
 	IsSubscribed     bool
+	Notify           bool
 }
 
 // Page Data Models
