@@ -44,14 +44,6 @@
       <p>{{.Description}}</p>
       {{if $.CurrentUser}}
       <div class="video-actions">
-        {{if $.CurrentUser}}
-        <form method="post" action="/videos/{{.ID}}/favorite" style="display:inline;">
-          <input type="hidden" name="return_to" value="/channel/{{$.Channel.ID}}">
-          <button class="button" type="submit">
-            {{if .IsFavorite}}Favorited{{else}}Favorite{{end}}
-          </button>
-        </form>
-        {{end}}
         {{if $.CurrentUser.IsAdmin}}
           <a href="/edit-video/{{.ID}}" class="button secondary">Edit / Lock</a>
         {{end}}

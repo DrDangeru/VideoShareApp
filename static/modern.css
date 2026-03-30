@@ -94,6 +94,7 @@ body {
   font-size: 1.5rem;
   font-weight: 800;
   background: linear-gradient(45deg, var(--text-link), var(--accent-primary));
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -0.5px;
@@ -247,6 +248,42 @@ body {
   align-items: start;
 }
 
+.hero-feed {
+  position: relative;
+  overflow: hidden;
+  padding: 32px;
+  padding-right: calc(30% + 16px);
+  min-height: 30vh;
+}
+
+.hero-feed-copy {
+  max-width: 100%;
+}
+
+.hero-feed-ad {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 30%;
+  height: 100%;
+  border-left: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.hero-feed-ad a {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-feed-ad img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .sidebar-stack {
   display: grid;
   gap: 24px;
@@ -267,9 +304,9 @@ body {
 
 .sidebar-item {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
   padding: 16px;
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -277,6 +314,14 @@ body {
   transition: all 0.2s ease;
   text-decoration: none;
   color: var(--text-main);
+}
+
+.sidebar-item form {
+  align-self: stretch;
+}
+
+.sidebar-item form button {
+  width: 100%;
 }
 
 .sidebar-item:hover {
@@ -700,6 +745,12 @@ body {
   }
   .feed-layout {
     grid-template-columns: 1fr;
+  }
+  .hero-feed {
+    flex-direction: column;
+  }
+  .hero-feed-ad {
+    display: none;
   }
   .sidebar-stack {
     position: static;

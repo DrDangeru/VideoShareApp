@@ -1,7 +1,20 @@
 {{define "page_content"}}
-<section class="hero">
-  <h1>{{.Heading}}</h1>
-  <p>{{.Subheading}}</p>
+<section class="hero hero-feed">
+  <div class="hero-feed-copy">
+    <h1>{{.Heading}}</h1>
+    <p>{{.Subheading}}</p>
+  </div>
+
+  <aside class="hero-feed-ad">
+    <span class="ad-badge">Ad</span>
+    <a href="https://example.com/ad-click" target="_blank" id="banner-ad-link">
+      <img
+        src="/static/img/yourAddColorMini.jpg"
+        alt="Advertisement"
+        id="banner-ad-img"
+      >
+    </a>
+  </aside>
 </section>
 
 
@@ -69,8 +82,13 @@
             <p>{{.LatestVideoTitle}}</p>
           </div>
           {{if $.CurrentUser}}
-          <form method="post" action="/channels/{{.ChannelID}}/subscribe">
-            <button class="button secondary" type="submit">{{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}</button>
+          <form
+            method="post"
+            action="/channels/{{.ChannelID}}/subscribe"
+          >
+            <button class="button secondary" type="submit">
+              {{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}
+            </button>
           </form>
           {{end}}
         </article>
@@ -92,16 +110,22 @@
         {{end}}
       </a>
       <div class="card-body">
-        <a href="/watch/{{.ID}}" class="video-title-link"><h3>{{.Title}}</h3></a>
-        <p class="muted"><a href="/channel/{{.ChannelID}}" class="video-title-link muted">{{.ChannelName}}</a> · {{.Location}}</p>
+        <a href="/watch/{{.ID}}" class="video-title-link">
+          <h3>{{.Title}}</h3>
+        </a>
+        <p class="muted">
+          <a href="/channel/{{.ChannelID}}" class="video-title-link muted">
+            {{.ChannelName}}
+          </a>
+          · {{.Location}}
+        </p>
         <p>{{.Description}}</p>
         {{if $.CurrentUser}}
         <div class="actions">
-          <form method="post" action="/videos/{{.ID}}/favorite">
-            <button class="button" type="submit">{{if .IsFavorite}}Favorited{{else}}Favorite{{end}}</button>
-          </form>
           <form method="post" action="/channels/{{.ChannelID}}/subscribe">
-            <button class="button secondary" type="submit">{{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}</button>
+            <button class="button secondary" type="submit">
+              {{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}
+            </button>
           </form>
           {{if or $.CurrentUser.IsAdmin (eq .ChannelID $.CurrentUser.ID)}}
             <a href="/edit-video/{{.ID}}" class="button secondary">Edit / Lock</a>
@@ -114,6 +138,7 @@
     <p>No videos available yet.</p>
     {{end}}
   </section>
+
 </section>
 {{end}}
 

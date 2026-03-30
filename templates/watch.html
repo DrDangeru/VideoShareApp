@@ -44,11 +44,6 @@
 
       {{if $.CurrentUser}}
       <div class="actions watch-actions">
-        <form method="post" action="/videos/{{.Video.ID}}/favorite">
-          <button class="button" type="submit">
-            {{if .Video.IsFavorite}}Favorited{{else}}Favorite{{end}}
-          </button>
-        </form>
         <form method="post" action="/channels/{{.Video.ChannelID}}/subscribe">
           <button class="button secondary" type="submit">
             {{if .Video.IsSubscribed}}Subscribed{{else}}Subscribe{{end}}

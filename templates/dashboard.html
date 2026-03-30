@@ -87,11 +87,6 @@
       <p class="muted">{{.ChannelName}} · {{.Location}}</p>
       <p>{{.Description}}</p>
       <div class="video-actions">
-        <form method="post" action="/videos/{{.ID}}/favorite" style="display:inline;">
-          <button class="button" type="submit">
-            {{if .IsFavorite}}Favorited{{else}}Favorite{{end}}
-          </button>
-        </form>
         <a href="/edit-video/{{.ID}}" class="button secondary">Edit</a>
       </div>
     </div>
