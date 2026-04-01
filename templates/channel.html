@@ -47,7 +47,7 @@
       {{end}}
       {{if $.CurrentUser}}
       <div class="video-actions">
-        {{if $.CurrentUser.IsAdmin}}
+        {{if or $.CurrentUser.IsAdmin (eq .OwnerUserID $.CurrentUser.ID)}}
           <a href="/edit-video/{{.ID}}" class="button secondary">Edit / Lock</a>
         {{end}}
       </div>

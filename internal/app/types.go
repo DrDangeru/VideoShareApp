@@ -28,6 +28,7 @@ type VideoView struct {
 	ThumbnailURL  string
 	Location      string
 	ChannelName   string
+	OwnerUserID   int64
 	IsFavorite    bool
 	IsSubscribed  bool
 	IsPublic      bool

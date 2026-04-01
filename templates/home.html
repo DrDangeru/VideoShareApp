@@ -142,7 +142,7 @@
               {{if .IsSubscribed}}Subscribed{{else}}Subscribe{{end}}
             </button>
           </form>
-          {{if or $.CurrentUser.IsAdmin (eq .ChannelID $.CurrentUser.ID)}}
+          {{if or $.CurrentUser.IsAdmin (eq .OwnerUserID $.CurrentUser.ID)}}
             <a href="/edit-video/{{.ID}}" class="button secondary">Edit / Lock</a>
           {{end}}
         </div>

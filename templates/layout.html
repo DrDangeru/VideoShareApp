@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{.Title}}</title>
-  <link rel="stylesheet" href="/static/modern.css?v=6">
+  <link rel="stylesheet" href="/static/modern.css?v=8">
   <script>
     function toggleTheme() {
       const isLight = document.documentElement.classList.toggle('theme-light');
@@ -47,6 +47,16 @@
   </script>
 </head>
 <body>
+  <!-- Decorative background circles -->
+  <div class="bg-decoration">
+    <div class="bg-circle bg-circle-1"></div>
+    <div class="bg-circle bg-circle-2"></div>
+    <div class="bg-circle bg-circle-3"></div>
+  </div>
+
+  <!-- Toast notification container -->
+  <div id="toast-container" class="toast-container"></div>
+
   <header class="header">
     <div class="wrap header-inner">
       <a class="brand" href="/">VideoShareApp</a>
@@ -83,6 +93,38 @@
   <main class="wrap main-content">
     {{template "page_content" .}}
   </main>
+
+  <script>
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      
+      setTimeout(() => toast.classList.add('show'), 10);
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Check URL params for subscription messages
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('subscribed')) {
+      showToast('Successfully subscribed to ' + params.get('subscribed'), 'success');
+    }
+    if (params.get('unsubscribed')) {
+      showToast('Unsubscribed from ' + params.get('unsubscribed'), 'info');
+    }
+    if (params.get('notify_on')) {
+      showToast('Notifications enabled for ' + params.get('notify_on'), 'success');
+    }
+    if (params.get('notify_off')) {
+      showToast('Notifications disabled for ' + params.get('notify_off'), 'info');
+    }
+  </script>
 </body>
 </html>
 {{end}}

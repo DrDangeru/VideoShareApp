@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -70,7 +71,7 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 		query = `
 			select
 				v.id, v.channel_id, v.title, v.description,
-				v.media_url, v.thumbnail_url, v.location, c.name,
+				v.media_url, v.thumbnail_url, v.location, c.name, c.user_id,
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				?,
 				v.is_public, v.is_admin_locked, v.allow_comments, v.made_for_kids
@@ -83,7 +84,7 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 		query = `
 			select
 				v.id, v.channel_id, v.title, v.description,
-				v.media_url, v.thumbnail_url, v.location, c.name,
+				v.media_url, v.thumbnail_url, v.location, c.name, c.user_id,
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				?,
 				v.is_public, v.is_admin_locked, v.allow_comments, v.made_for_kids
@@ -96,7 +97,7 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 		query = `
 			select
 				v.id, v.channel_id, v.title, v.description,
-				v.media_url, v.thumbnail_url, v.location, c.name,
+				v.media_url, v.thumbnail_url, v.location, c.name, c.user_id,
 				0, 0, v.is_public, v.is_admin_locked, 1, 0
 			from videos v join channels c on c.id = v.channel_id
 			where v.channel_id = ? and v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0
@@ -124,6 +125,7 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 			&item.ThumbnailURL,
 			&item.Location,
 			&item.ChannelName,
+			&item.OwnerUserID,
 			&item.IsFavorite,
 			&item.IsSubscribed,
 			&item.IsPublic,
@@ -361,24 +363,46 @@ func (s *Server) channelActionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get channel name for toast notification
+	var channelName string
+	s.db.QueryRow(`select name from channels where id = ?`, channelID).Scan(&channelName)
+
+	var redirectURL string
 	if action == "subscribe" {
-		_, err = s.db.Exec(
-			`insert or ignore into subscriptions(user_id, channel_id) values(?, ?)`,
-			user.ID,
-			channelID,
-		)
+		// Check if already subscribed
+		var exists int
+		s.db.QueryRow(`select count(*) from subscriptions where user_id = ? and channel_id = ?`, user.ID, channelID).Scan(&exists)
+
+		if exists > 0 {
+			// Unsubscribe
+			_, err = s.db.Exec(`delete from subscriptions where user_id = ? and channel_id = ?`, user.ID, channelID)
+			redirectURL = "/?unsubscribed=" + url.QueryEscape(channelName)
+		} else {
+			// Subscribe
+			_, err = s.db.Exec(`insert into subscriptions(user_id, channel_id) values(?, ?)`, user.ID, channelID)
+			redirectURL = "/?subscribed=" + url.QueryEscape(channelName)
+		}
 	} else {
-		// Toggle notify: flip 0<->1
+		// Toggle notify
+		var currentNotify int
+		s.db.QueryRow(`select notify from subscriptions where user_id = ? and channel_id = ?`, user.ID, channelID).Scan(&currentNotify)
+
 		_, err = s.db.Exec(
 			`update subscriptions set notify = case when notify = 1 then 0 else 1 end where user_id = ? and channel_id = ?`,
 			user.ID,
 			channelID,
 		)
+
+		if currentNotify == 1 {
+			redirectURL = "/?notify_off=" + url.QueryEscape(channelName)
+		} else {
+			redirectURL = "/?notify_on=" + url.QueryEscape(channelName)
+		}
 	}
 	if err != nil {
 		s.serverError(w, err)
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }

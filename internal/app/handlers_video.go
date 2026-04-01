@@ -447,7 +447,7 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 	if user != nil && user.IsAdmin {
 		row = s.db.QueryRow(`
 			select v.id, v.channel_id, v.title, v.description, v.media_url, v.thumbnail_url,
-				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments,
+				v.location, c.name, c.user_id, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments,
 				v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id = ?
@@ -455,7 +455,7 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 	} else if user != nil {
 		row = s.db.QueryRow(`
 			select v.id, v.channel_id, v.title, v.description, v.media_url, v.thumbnail_url,
-				v.location, c.name,
+				v.location, c.name, c.user_id,
 				exists(select 1 from favorites f where f.user_id = ? and f.video_id = v.id),
 				exists(select 1 from subscriptions s where s.user_id = ? and s.channel_id = c.id),
 				v.is_public, v.is_admin_locked, v.allow_comments, v.made_for_kids
@@ -467,7 +467,7 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		row = s.db.QueryRow(`
 			select v.id, v.channel_id, v.title, v.description, v.media_url, v.thumbnail_url,
-				v.location, c.name, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments,
+				v.location, c.name, c.user_id, 0, 0, v.is_public, v.is_admin_locked, v.allow_comments,
 				v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id = ? and v.is_public = 1 and v.is_admin_locked = 0 and c.is_admin_locked = 0
@@ -477,7 +477,7 @@ func (s *Server) watchHandler(w http.ResponseWriter, r *http.Request) {
 	var video VideoView
 	err = row.Scan(
 		&video.ID, &video.ChannelID, &video.Title, &video.Description, &video.MediaURL, &video.ThumbnailURL,
-		&video.Location, &video.ChannelName, &video.IsFavorite, &video.IsSubscribed, &video.IsPublic, &video.IsAdminLocked, &video.AllowComments, &video.MadeForKids,
+		&video.Location, &video.ChannelName, &video.OwnerUserID, &video.IsFavorite, &video.IsSubscribed, &video.IsPublic, &video.IsAdminLocked, &video.AllowComments, &video.MadeForKids,
 	)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)

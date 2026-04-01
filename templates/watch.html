@@ -17,17 +17,16 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: rgba(0,0,0,0.9);
+        background: rgba(0,0,0,0.95);
         color: white;
       ">
         <h2 style="margin-bottom: 1rem;">Advertisement</h2>
-        <video id="preroll-video" width="100%" height="auto" 
-               style="max-height: 80%;" muted playsinline></video>
-        <div style="margin-top: 1rem; font-weight: bold;">
+        <img id="preroll-image" src="/static/img/yourAddColorMini.jpg" 
+             alt="Advertisement" 
+             style="max-width: 90%; max-height: 70%; object-fit: contain;">
+        <div style="margin-top: 1rem; font-weight: bold; font-size: 1.2rem;">
           Video will play in <span id="ad-countdown">5</span> seconds...
         </div>
-        <button id="skip-ad-btn" class="button secondary" 
-                style="margin-top: 1rem; display: none;">Skip Ad</button>
       </div>
 
       <video id="main-video" controls width="100%" 
@@ -52,7 +51,7 @@
             {{if .Video.IsSubscribed}}Subscribed{{else}}Subscribe{{end}}
           </button>
         </form>
-        {{if or $.CurrentUser.IsAdmin (eq .Video.ChannelID $.CurrentUser.ID)}}
+        {{if or $.CurrentUser.IsAdmin (eq .Video.OwnerUserID $.CurrentUser.ID)}}
           <a href="/edit-video/{{.Video.ID}}" class="button secondary">Edit / Lock</a>
         {{end}}
       </div>
