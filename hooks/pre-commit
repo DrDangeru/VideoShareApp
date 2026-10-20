@@ -1,0 +1,27 @@
+#!/bin/sh
+# Pre-commit checks for VideoShareApp: gofmt, vet, build, tests.
+# Enable after cloning (one-time, per clone):
+#   git config core.hooksPath hooks
+# Skip for a single commit: git commit --no-verify
+
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: gofmt"
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then
+	echo "gofmt found unformatted files:" >&2
+	echo "$unformatted" >&2
+	exit 1
+fi
+
+echo "pre-commit: go vet"
+go vet ./...
+
+echo "pre-commit: go build"
+go build ./...
+
+echo "pre-commit: go test"
+go test -count=1 ./...
+
+echo "pre-commit: all checks passed"
