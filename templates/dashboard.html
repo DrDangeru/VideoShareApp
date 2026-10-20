@@ -30,17 +30,19 @@
       <h3>2. Video &amp; Thumbnail</h3>
       <label>
         <span>Video File (MP4, WebM, MOV)</span>
-        <input type="file" name="video_file" id="video-file" 
+        <input type="file" name="video" id="video-file"
                accept="video/mp4,video/webm,video/quicktime" required>
       </label>
 
       <video id="vid-preview" controls class="video-preview hidden"></video>
 
       <div class="thumbnail-capture hidden" id="thumb-section">
-        <button type="button" id="btn-capture" class="button secondary">Capture Thumbnail</button>
+        <button type="button" id="btn-capture" class="button secondary" disabled>
+          Capture Thumbnail
+        </button>
         <div>
-          <input type="hidden" name="thumbnail" id="thumbnail-data">
-          <img id="thumb-preview" src="" class="thumbnail-preview hidden">
+          <input type="hidden" name="thumbnail_base64" id="thumbnail-data">
+          <img id="thumb-preview" alt="Video thumbnail preview" class="thumbnail-preview hidden">
         </div>
       </div>
     </div>
@@ -57,7 +59,7 @@
         <textarea name="description" rows="3"></textarea>
       </label>
       <label class="checkbox-label">
-        <input type="checkbox" name="is_public" value="1" checked>
+        <input type="checkbox" name="is_public" value="on" checked>
         <span>Make video public</span>
       </label>
       <label class="checkbox-label">
@@ -116,6 +118,9 @@
   const thumbData = document.getElementById('thumbnail-data');
   const channelSelect = document.getElementById('channel-select');
   const newChannelInput = document.getElementById('new-channel');
+  let previewObjectURL = '';
+  let frameReady = false;
+  let autoCapturePending = false;
 
   // Clear select when typing a new channel name, and vice versa
   newChannelInput.addEventListener('input', () => {
@@ -125,53 +130,141 @@
     if (channelSelect.value) newChannelInput.value = '';
   });
 
+  function clearThumbnail() {
+    thumbData.value = '';
+    thumbPreview.removeAttribute('src');
+    thumbPreview.classList.add('hidden');
+    thumbPreview.classList.remove('block');
+  }
+
+  function resetPreview() {
+    const previousObjectURL = previewObjectURL;
+    previewObjectURL = '';
+    frameReady = false;
+    autoCapturePending = false;
+    captureBtn.disabled = true;
+    clearThumbnail();
+    vidPreview.pause();
+    vidPreview.removeAttribute('src');
+    vidPreview.load();
+    if (previousObjectURL) URL.revokeObjectURL(previousObjectURL);
+    vidPreview.classList.add('hidden');
+    vidPreview.classList.remove('block');
+    thumbSection.classList.add('hidden');
+  }
+
+  function hasDecodableFrame() {
+    return previewObjectURL !== '' &&
+      vidPreview.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      Number.isFinite(vidPreview.videoWidth) && vidPreview.videoWidth > 0 &&
+      Number.isFinite(vidPreview.videoHeight) && vidPreview.videoHeight > 0;
+  }
+
   function captureFrame() {
-    if (!vidPreview.videoWidth) return;
+    if (!frameReady || !hasDecodableFrame()) {
+      frameReady = false;
+      autoCapturePending = false;
+      captureBtn.disabled = true;
+      clearThumbnail();
+      return false;
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = 640;
     canvas.height = 360;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#1f1f1f';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const scale = Math.min(
-      canvas.width / vidPreview.videoWidth, 
-      canvas.height / vidPreview.videoHeight
-    );
-    const w = vidPreview.videoWidth * scale;
-    const h = vidPreview.videoHeight * scale;
-    const x = (canvas.width - w) / 2;
-    const y = (canvas.height - h) / 2;
-    ctx.drawImage(vidPreview, x, y, w, h);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-    thumbData.value = dataUrl;
-    thumbPreview.src = dataUrl;
-    thumbPreview.classList.remove('hidden');
-    thumbPreview.classList.add('block');
+    try {
+      if (!ctx) throw new Error('Canvas context unavailable');
+      ctx.fillStyle = '#1f1f1f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const scale = Math.min(
+        canvas.width / vidPreview.videoWidth,
+        canvas.height / vidPreview.videoHeight
+      );
+      const w = vidPreview.videoWidth * scale;
+      const h = vidPreview.videoHeight * scale;
+      const x = (canvas.width - w) / 2;
+      const y = (canvas.height - h) / 2;
+      ctx.drawImage(vidPreview, x, y, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      if (!dataUrl.startsWith('data:image/jpeg;base64,')) {
+        throw new Error('Thumbnail encoding failed');
+      }
+      thumbData.value = dataUrl;
+      thumbPreview.src = dataUrl;
+      thumbPreview.classList.remove('hidden');
+      thumbPreview.classList.add('block');
+      autoCapturePending = false;
+      return true;
+    } catch {
+      frameReady = false;
+      autoCapturePending = false;
+      captureBtn.disabled = true;
+      clearThumbnail();
+      return false;
+    }
   }
 
-  // Show video preview when file is selected and auto-capture first frame
+  function captureFirstFrame() {
+    if (!previewObjectURL) return;
+    if (!hasDecodableFrame()) {
+      frameReady = false;
+      autoCapturePending = false;
+      captureBtn.disabled = true;
+      clearThumbnail();
+      return;
+    }
+    frameReady = true;
+    captureBtn.disabled = false;
+    if (thumbData.value) return;
+    const duration = vidPreview.duration;
+    const seekTarget = Number.isFinite(duration) && duration > 0
+      ? Math.min(0.1, duration / 2)
+      : 0;
+    if (seekTarget > 0 && Math.abs(vidPreview.currentTime - seekTarget) > 0.001) {
+      try {
+        autoCapturePending = true;
+        vidPreview.currentTime = seekTarget;
+        return;
+      } catch {
+        autoCapturePending = false;
+      }
+    }
+    captureFrame();
+  }
+
+  function handlePreviewError() {
+    if (!previewObjectURL) return;
+    frameReady = false;
+    autoCapturePending = false;
+    captureBtn.disabled = true;
+    clearThumbnail();
+  }
+
+  vidPreview.addEventListener('loadeddata', captureFirstFrame);
+  vidPreview.addEventListener('seeked', () => {
+    if (frameReady && autoCapturePending) captureFrame();
+  });
+  vidPreview.addEventListener('error', handlePreviewError);
+
   fileInput.addEventListener('change', () => {
-    const f = fileInput.files[0];
-    if (!f) return;
-    const url = URL.createObjectURL(f);
-    vidPreview.src = url;
+    const file = fileInput.files[0];
+    resetPreview();
+    if (!file) return;
+
+    previewObjectURL = URL.createObjectURL(file);
+    autoCapturePending = true;
+    vidPreview.src = previewObjectURL;
     vidPreview.classList.remove('hidden');
     vidPreview.classList.add('block');
     thumbSection.classList.remove('hidden');
-    thumbSection.classList.add('thumbnail-capture');
-
-    vidPreview.addEventListener('loadeddata', function onLoaded() {
-      vidPreview.currentTime = 0.1;
-      vidPreview.removeEventListener('loadeddata', onLoaded);
-    });
-    vidPreview.addEventListener('seeked', function onSeeked() {
-      captureFrame();
-      vidPreview.removeEventListener('seeked', onSeeked);
-    });
   });
 
-  // Manual re-capture at any point
   captureBtn.addEventListener('click', captureFrame);
+  window.addEventListener('pagehide', () => {
+    if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
+    previewObjectURL = '';
+  }, { once: true });
 </script>
 {{end}}
 

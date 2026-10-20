@@ -21,9 +21,9 @@
         <div>
           <input type="hidden" name="thumbnail" id="thumbnail-data">
           {{if .Video.ThumbnailURL}}
-            <img id="thumb-preview" src="{{.Video.ThumbnailURL}}" class="thumbnail-preview block">
+            <img id="thumb-preview" src="{{.Video.ThumbnailURL}}" alt="Video thumbnail preview" class="thumbnail-preview block">
           {{else}}
-            <img id="thumb-preview" src="" class="thumbnail-preview hidden">
+            <img id="thumb-preview" alt="Video thumbnail preview" class="thumbnail-preview hidden">
           {{end}}
         </div>
       </div>
@@ -90,43 +90,110 @@
   const captureBtn = document.getElementById('btn-capture');
   const preview = document.getElementById('thumb-preview');
   const thumbData = document.getElementById('thumbnail-data');
+  const savedPreviewURL = preview.getAttribute('src') || '';
+  let frameReady = false;
+  let autoCapturePending = !savedPreviewURL || savedPreviewURL.includes('placeholder');
+  captureBtn.disabled = true;
+
+  function resetGeneratedPreview() {
+    thumbData.value = '';
+    if (savedPreviewURL) {
+      preview.src = savedPreviewURL;
+      preview.classList.remove('hidden');
+      preview.classList.add('block');
+    } else {
+      preview.removeAttribute('src');
+      preview.classList.add('hidden');
+      preview.classList.remove('block');
+    }
+  }
+
+  function hasDecodableFrame() {
+    return video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      Number.isFinite(video.videoWidth) && video.videoWidth > 0 &&
+      Number.isFinite(video.videoHeight) && video.videoHeight > 0;
+  }
 
   function captureFrame() {
-    if (!video.videoWidth) return;
+    if (!frameReady || !hasDecodableFrame()) {
+      frameReady = false;
+      autoCapturePending = false;
+      captureBtn.disabled = true;
+      resetGeneratedPreview();
+      return false;
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = 640;
     canvas.height = 360;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#1f1f1f';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
-    const w = video.videoWidth * scale;
-    const h = video.videoHeight * scale;
-    const x = (canvas.width - w) / 2;
-    const y = (canvas.height - h) / 2;
-    ctx.drawImage(video, x, y, w, h);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-    thumbData.value = dataUrl;
-    preview.src = dataUrl;
-    preview.classList.remove('hidden');
-    preview.classList.add('block');
-  }
-
-  captureBtn.addEventListener('click', captureFrame);
-
-  // Auto-capture first frame if no real thumbnail exists yet
-  const hasRealThumb = preview.src && !preview.src.includes('placeholder');
-  if (!hasRealThumb) {
-    video.addEventListener('loadeddata', function autoCapture() {
-      video.currentTime = 0.1;
-    });
-    video.addEventListener('seeked', function onSeeked() {
-      if (!thumbData.value) {
-        captureFrame();
+    try {
+      if (!ctx) throw new Error('Canvas context unavailable');
+      ctx.fillStyle = '#1f1f1f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+      const w = video.videoWidth * scale;
+      const h = video.videoHeight * scale;
+      const x = (canvas.width - w) / 2;
+      const y = (canvas.height - h) / 2;
+      ctx.drawImage(video, x, y, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      if (!dataUrl.startsWith('data:image/jpeg;base64,')) {
+        throw new Error('Thumbnail encoding failed');
       }
-      video.removeEventListener('seeked', onSeeked);
-    });
+      thumbData.value = dataUrl;
+      preview.src = dataUrl;
+      preview.classList.remove('hidden');
+      preview.classList.add('block');
+      autoCapturePending = false;
+      return true;
+    } catch {
+      frameReady = false;
+      autoCapturePending = false;
+      captureBtn.disabled = true;
+      resetGeneratedPreview();
+      return false;
+    }
   }
+
+  function handleLoadedData() {
+    if (!hasDecodableFrame()) {
+      frameReady = false;
+      captureBtn.disabled = true;
+      return;
+    }
+    frameReady = true;
+    captureBtn.disabled = false;
+    if (!autoCapturePending || thumbData.value) return;
+
+    const duration = video.duration;
+    const seekTarget = Number.isFinite(duration) && duration > 0
+      ? Math.min(0.1, duration / 2)
+      : 0;
+    if (seekTarget > 0 && Math.abs(video.currentTime - seekTarget) > 0.001) {
+      try {
+        autoCapturePending = true;
+        video.currentTime = seekTarget;
+        return;
+      } catch {
+        autoCapturePending = false;
+      }
+    }
+    captureFrame();
+  }
+
+  video.addEventListener('loadeddata', handleLoadedData);
+  video.addEventListener('seeked', () => {
+    if (frameReady && autoCapturePending) captureFrame();
+  });
+  video.addEventListener('error', () => {
+    frameReady = false;
+    autoCapturePending = false;
+    captureBtn.disabled = true;
+    resetGeneratedPreview();
+  });
+  captureBtn.addEventListener('click', captureFrame);
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) handleLoadedData();
 </script>
 {{end}}
 {{end}}
