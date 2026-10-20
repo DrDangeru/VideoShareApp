@@ -139,6 +139,10 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		videos = append(videos, item)
 	}
+	if err := rows.Err(); err != nil {
+		s.serverError(w, err)
+		return
+	}
 
 	data := ChannelPageData{
 		Title:        ch.Name + " - VideoShareApp",

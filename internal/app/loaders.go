@@ -1,5 +1,7 @@
 package app
 
+import "strings"
+
 func (s *Server) loadSimilarVideos(
 	videoID, channelID int64,
 	location string,
@@ -31,6 +33,7 @@ func (s *Server) loadSimilarVideos(
 				v.is_public, v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id != ? and v.is_public = 1 and v.is_admin_locked = 0
+				and c.is_admin_locked = 0
 				and (v.channel_id = ? or v.location = ?)
 			order by case when v.channel_id = ? then 0 else 1 end, v.id desc
 			limit 8
@@ -42,6 +45,7 @@ func (s *Server) loadSimilarVideos(
 				v.location, c.id, c.name, 0, 0, v.is_public, v.made_for_kids
 			from videos v join channels c on c.id = v.channel_id
 			where v.id != ? and v.is_public = 1 and v.is_admin_locked = 0
+				and c.is_admin_locked = 0
 				and (v.channel_id = ? or v.location = ?)
 			order by case when v.channel_id = ? then 0 else 1 end, v.id desc
 			limit 8
@@ -113,7 +117,7 @@ func (s *Server) loadSimilarChannels(
 				where v2.channel_id = c.id and v2.is_public = 1 and v2.is_admin_locked = 0
 				order by v2.id desc limit 1
 			)
-			where c.id != ? and c.location = ?
+			where c.is_admin_locked = 0 and c.id != ? and c.location = ?
 			order by v.id desc
 			limit 6
 		`
@@ -127,7 +131,7 @@ func (s *Server) loadSimilarChannels(
 				where v2.channel_id = c.id and v2.is_public = 1 and v2.is_admin_locked = 0
 				order by v2.id desc limit 1
 			)
-			where c.id != ? and c.location = ?
+			where c.is_admin_locked = 0 and c.id != ? and c.location = ?
 			order by v.id desc
 			limit 6
 		`
@@ -232,16 +236,22 @@ func (s *Server) loadChannelSidebar(user *User, subscribedOnly bool) ([]ChannelS
 		}
 	}
 
+	conditions := []string{}
+	if user == nil || !user.IsAdmin {
+		conditions = append(conditions, "c.is_admin_locked = 0")
+	}
 	if subscribedOnly {
 		if user == nil {
 			return []ChannelSidebarItem{}, nil
 		}
-		query += `
-			where exists(
-				select 1 from subscriptions s
-				where s.user_id = ? and s.channel_id = c.id
-			)`
+		conditions = append(conditions, `exists(
+			select 1 from subscriptions s
+			where s.user_id = ? and s.channel_id = c.id
+		)`)
 		args = append(args, user.ID)
+	}
+	if len(conditions) > 0 {
+		query += "\nwhere " + strings.Join(conditions, "\nand ") + "\n"
 	}
 
 	if user != nil {

@@ -1,41 +1,46 @@
 package app
 
 import (
-	"database/sql"
 	"net/http"
 	"path/filepath"
 	"strings"
 )
 
+func validFileRequestPath(path, prefix string) bool {
+	if !strings.HasPrefix(path, prefix) || strings.ContainsAny(path, `\:`) {
+		return false
+	}
+
+	relative := strings.TrimPrefix(path, prefix)
+	if relative == "" {
+		return false
+	}
+	for _, segment := range strings.Split(relative, "/") {
+		if segment == "" || segment == "." || segment == ".." ||
+			strings.HasSuffix(segment, ".") || strings.HasSuffix(segment, " ") {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Server) staticHandler() http.Handler {
 	fileServer := http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only protect user uploads; let regular static assets pass through
-		if strings.HasPrefix(r.URL.Path, "/static/uploads/") {
-			mediaURL := r.URL.Path
+		if !validFileRequestPath(r.URL.Path, "/static/") {
+			http.NotFound(w, r)
+			return
+		}
 
-			var channelAdminLocked int
-			var isPublic int
-			var videoAdminLocked int
-			var channelOwnerID int64
-			err := s.db.QueryRow(`
-				select c.is_admin_locked, v.is_public, v.is_admin_locked, c.user_id
-				from videos v
-				join channels c on c.id = v.channel_id
-				where v.media_url = ? or v.thumbnail_url = ?
-			`, mediaURL, mediaURL).Scan(&channelAdminLocked, &isPublic, &videoAdminLocked, &channelOwnerID)
-
-			if err == nil {
-				user, _ := s.currentUser(r)
-				isAdmin := user != nil && user.IsAdmin
-				isOwner := user != nil && user.ID == channelOwnerID
-
-				if !isAdmin && !isOwner {
-					if channelAdminLocked == 1 || videoAdminLocked == 1 || isPublic == 0 {
-						http.Error(w, "Forbidden", http.StatusForbidden)
-						return
-					}
+		lowerPath := strings.ToLower(r.URL.Path)
+		isUpload := lowerPath == "/static/uploads" ||
+			strings.HasPrefix(lowerPath, "/static/uploads/")
+		if isUpload {
+			if lowerPath == "/static/uploads" || !s.authorizeMedia(w, r, r.URL.Path, true) {
+				if lowerPath == "/static/uploads" {
+					http.NotFound(w, r)
 				}
+				return
 			}
 		}
 
@@ -43,44 +48,86 @@ func (s *Server) staticHandler() http.Handler {
 	})
 }
 
-func (s *Server) mediaHandler(w http.ResponseWriter, r *http.Request) {
-	// Reconstruct the media URL to match what is stored in the database
-	mediaURL := r.URL.Path // e.g. /media/VID_...
+func (s *Server) authorizeMedia(
+	w http.ResponseWriter,
+	r *http.Request,
+	mediaURL string,
+	allowAvatar bool,
+) bool {
+	user, _ := s.currentUser(r)
+	isAdmin := user != nil && user.IsAdmin
 
-	// Find the video and channel to check permissions
-	var channelAdminLocked int
-	var isPublic int
-	var videoAdminLocked int
-	var channelOwnerID int64
-	err := s.db.QueryRow(`
+	query := `
 		select c.is_admin_locked, v.is_public, v.is_admin_locked, c.user_id
 		from videos v
 		join channels c on c.id = v.channel_id
 		where v.media_url = ? or v.thumbnail_url = ?
-	`, mediaURL, mediaURL).Scan(&channelAdminLocked, &isPublic, &videoAdminLocked, &channelOwnerID)
+	`
+	args := []any{mediaURL, mediaURL}
+	if allowAvatar {
+		query += `
+			union all
+			select is_admin_locked, 1, 0, user_id
+			from channels
+			where avatar_url = ?
+		`
+		args = append(args, mediaURL)
+	}
 
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			// If not found in DB, just serve it (might be a generic asset)
-			http.ServeFile(w, r, filepath.Join("Videos", strings.TrimPrefix(mediaURL, "/media/")))
-			return
-		}
 		s.serverError(w, err)
+		return false
+	}
+	defer rows.Close()
+
+	var channelAdminLocked int
+	var isPublic int
+	var videoAdminLocked int
+	var channelOwnerID int64
+	matched := false
+	denied := false
+	for rows.Next() {
+		if err := rows.Scan(
+			&channelAdminLocked,
+			&isPublic,
+			&videoAdminLocked,
+			&channelOwnerID,
+		); err != nil {
+			s.serverError(w, err)
+			return false
+		}
+		matched = true
+		isOwner := user != nil && user.ID == channelOwnerID
+		if !isAdmin && !isOwner &&
+			(channelAdminLocked == 1 || videoAdminLocked == 1 || isPublic == 0) {
+			denied = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		s.serverError(w, err)
+		return false
+	}
+	if !matched {
+		http.NotFound(w, r)
+		return false
+	}
+	if denied {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+func (s *Server) mediaHandler(w http.ResponseWriter, r *http.Request) {
+	mediaURL := r.URL.Path
+	if !validFileRequestPath(mediaURL, "/media/") {
+		http.NotFound(w, r)
+		return
+	}
+	if !s.authorizeMedia(w, r, mediaURL, false) {
 		return
 	}
 
-	user, _ := s.currentUser(r)
-	isAdmin := user != nil && user.IsAdmin
-	isOwner := user != nil && user.ID == channelOwnerID
-
-	// Check if video is locked or private
-	if !isAdmin && !isOwner {
-		if channelAdminLocked == 1 || videoAdminLocked == 1 || isPublic == 0 {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-	}
-
-	// Serve the file
 	http.ServeFile(w, r, filepath.Join("Videos", strings.TrimPrefix(mediaURL, "/media/")))
 }
