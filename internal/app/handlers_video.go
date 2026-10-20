@@ -2,7 +2,6 @@ package app
 
 import (
 	"database/sql"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -68,18 +67,24 @@ func (s *Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to parse upload", http.StatusBadRequest)
 		return
 	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+	thumbnailBytes, err := decodeThumbnail(r.FormValue("thumbnail_base64"))
+	if err != nil {
+		http.Error(w, "Invalid thumbnail image.", http.StatusBadRequest)
+		return
+	}
 
 	var channelID int64
 	channelOwnerID := user.ID
 	newChannelName := strings.TrimSpace(r.FormValue("new_channel"))
 	if newChannelName != "" {
-		res, err := s.db.Exec(`insert into channels(name, location, user_id) values(?, ?, ?)`,
-			newChannelName, user.Location, user.ID)
+		channelID, err = createChannel(s.db, newChannelName, user.Location, user.ID)
 		if err != nil {
 			s.serverError(w, err)
 			return
 		}
-		channelID, _ = res.LastInsertId()
 	} else {
 		channelID, err = strconv.ParseInt(r.FormValue("channel_id"), 10, 64)
 		if err != nil || channelID < 1 {
@@ -187,18 +192,13 @@ func (s *Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	mediaURL := "/" + filepath.ToSlash(videoPath)
 
 	thumbnailURL := "/static/img/placeholder.svg"
-	thumbnailBase64 := r.FormValue("thumbnail_base64")
-	if thumbnailBase64 != "" {
-		parts := strings.Split(thumbnailBase64, ",")
-		if len(parts) == 2 {
-			imgBytes, err := base64.StdEncoding.DecodeString(parts[1])
-			if err == nil {
-				thumbPath := filepath.Join(videoDir, "original.jpg")
-				if err := os.WriteFile(thumbPath, imgBytes, 0644); err == nil {
-					thumbnailURL = "/" + filepath.ToSlash(thumbPath)
-				}
-			}
+	if thumbnailBytes != nil {
+		thumbPath := filepath.Join(videoDir, "original.jpg")
+		if err := os.WriteFile(thumbPath, thumbnailBytes, 0o644); err != nil {
+			s.serverError(w, err)
+			return
 		}
+		thumbnailURL = "/" + filepath.ToSlash(thumbPath)
 	}
 
 	_, err = s.db.Exec(`update videos set media_url = ?, thumbnail_url = ? where id = ?`,
@@ -300,14 +300,13 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		var channelOwnerID int64
-		var mediaURL string
 		row := s.db.QueryRow(`
-			select v.media_url, c.user_id
+			select c.user_id
 			from videos v
 			join channels c on c.id = v.channel_id
 			where v.id = ?
 		`, videoID)
-		if err := row.Scan(&mediaURL, &channelOwnerID); err == sql.ErrNoRows {
+		if err := row.Scan(&channelOwnerID); err == sql.ErrNoRows {
 			http.NotFound(w, r)
 			return
 		} else if err != nil {
@@ -324,7 +323,18 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 		if isOwner {
 			var dbLocation string
 			var dbIsAdminLocked bool
-			s.db.QueryRow(`select location, is_admin_locked from videos where id = ?`, videoID).Scan(&dbLocation, &dbIsAdminLocked)
+			err := s.db.QueryRow(
+				`select location, is_admin_locked from videos where id = ?`,
+				videoID,
+			).Scan(&dbLocation, &dbIsAdminLocked)
+			if err == sql.ErrNoRows {
+				http.NotFound(w, r)
+				return
+			}
+			if err != nil {
+				s.serverError(w, err)
+				return
+			}
 
 			title := r.FormValue("title")
 			description := r.FormValue("description")
@@ -355,22 +365,30 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 				madeForKidsInt = 1
 			}
 
+			thumbnailBytes, err := decodeThumbnail(r.FormValue("thumbnail"))
+			if err != nil {
+				http.Error(w, "Invalid thumbnail image.", http.StatusBadRequest)
+				return
+			}
 			var thumbnailURL string
-			thumbnailBase64 := r.FormValue("thumbnail")
-			if thumbnailBase64 != "" {
-				parts := strings.Split(thumbnailBase64, ",")
-				if len(parts) == 2 {
-					imgBytes, err := base64.StdEncoding.DecodeString(parts[1])
-					if err == nil {
-						thumbPath := filepath.Join(filepath.Dir(strings.TrimPrefix(mediaURL, "/")), "original.jpg")
-
-						if mkErr := os.MkdirAll(filepath.Dir(thumbPath), 0755); mkErr != nil {
-							log.Println("thumbnail dir error:", mkErr)
-						} else if err = os.WriteFile(thumbPath, imgBytes, 0644); err == nil {
-							thumbnailURL = "/" + filepath.ToSlash(thumbPath)
-						}
-					}
+			if thumbnailBytes != nil {
+				thumbDir := filepath.Join(
+					"static",
+					"uploads",
+					"users",
+					strconv.FormatInt(channelOwnerID, 10),
+					strconv.FormatInt(videoID, 10),
+				)
+				if err := os.MkdirAll(thumbDir, 0o755); err != nil {
+					s.serverError(w, err)
+					return
 				}
+				thumbPath := filepath.Join(thumbDir, "original.jpg")
+				if err := os.WriteFile(thumbPath, thumbnailBytes, 0o644); err != nil {
+					s.serverError(w, err)
+					return
+				}
+				thumbnailURL = "/" + filepath.ToSlash(thumbPath)
 			}
 
 			if thumbnailURL != "" {
@@ -400,6 +418,10 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 					_, err = s.db.Exec(`update videos set title = ?, description = ?, location = ?, is_public = ?, allow_comments = ?, made_for_kids = ? where id = ?`,
 						title, description, location, isPublicInt, allowCommentsInt, madeForKidsInt, videoID)
 				}
+			}
+			if err != nil {
+				s.serverError(w, err)
+				return
 			}
 
 		}
@@ -553,12 +575,33 @@ func (s *Server) addCommentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var allowComments int
-	err = s.db.QueryRow(`select allow_comments from videos where id = ?`, videoID).Scan(&allowComments)
+	var isPublic int
+	var videoAdminLocked int
+	var channelAdminLocked int
+	var videoOwnerID int64
+	err = s.db.QueryRow(`
+		select v.allow_comments, v.is_public, v.is_admin_locked, c.is_admin_locked, v.user_id
+		from videos v
+		join channels c on c.id = v.channel_id
+		where v.id = ?
+	`, videoID).Scan(
+		&allowComments,
+		&isPublic,
+		&videoAdminLocked,
+		&channelAdminLocked,
+		&videoOwnerID,
+	)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Video not found", http.StatusNotFound)
 		return
 	} else if err != nil {
 		s.serverError(w, err)
+		return
+	}
+
+	if !user.IsAdmin &&
+		(videoAdminLocked == 1 || channelAdminLocked == 1 || (isPublic == 0 && videoOwnerID != user.ID)) {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -613,10 +656,15 @@ func (s *Server) deleteCommentHandler(w http.ResponseWriter, r *http.Request) {
 
 	var channelOwnerID int64
 	err = s.db.QueryRow(`
-		select c.owner_user_id 
-		from channels c 
-		join videos v on v.channel_id = c.id 
-		where v.id = ?`, videoID).Scan(&channelOwnerID)
+		select c.user_id
+		from channels c
+		join videos v on v.channel_id = c.id
+		where v.id = ?
+	`, videoID).Scan(&channelOwnerID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Video not found", http.StatusNotFound)
+		return
+	}
 	if err != nil {
 		s.serverError(w, err)
 		return

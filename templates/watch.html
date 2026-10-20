@@ -97,7 +97,7 @@
               {{.Content}}
             </div>
             {{if $.CurrentUser}}
-              {{if or (eq $.CurrentUser.ID .UserID) (eq $.CurrentUser.ID $.Video.ChannelID) 
+              {{if or (eq $.CurrentUser.ID .UserID) (eq $.CurrentUser.ID $.Video.OwnerUserID)
               $.CurrentUser.IsAdmin}}
               <form action="/delete-comment/{{.ID}}" method="post" class="delete-comment-form">
                 <button type="submit" class="button secondary small" 
