@@ -1,3 +1,15 @@
 {
-  "name": "VideoShareApp"
+  "name": "videoshareapp",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:report": "playwright show-report",
+    "test:go": "go test -count=1 ./..."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
 }

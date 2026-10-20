@@ -2,17 +2,15 @@
 /tmp/
 /dist/
 /bin/
+/node_modules/
+/test-results/
+/playwright-report/
 *.exe
 *.dll
 *.so
 *.dylib
 .env
 
-# /static/uploads/users/*
-# !/static/uploads/users/.gitkeep
-
-# /Videos/*
-
 thumbgen.exe
 *~
-cmd/thumbgen/*  
+cmd/thumbgen/*
