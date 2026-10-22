@@ -13,7 +13,18 @@ already cached, and Chromium from the pinned Playwright version. The fixture
 runner sets `GOPROXY=off`, `GOTOOLCHAIN=local`, and `GOSUMDB=off`.
 If Go modules are not cached in a new environment, run `go mod download` only
 after registry access is explicitly approved; this E2E runner never downloads
-Go modules. The fixture test binary also has a 10-minute hard timeout.
+Go modules. `modernc.org/sqlite` v1.60.1 is paired with `modernc.org/libc`
+v1.77.1; keep that exact module pairing when updating dependencies. The fixture
+test binary also has a 10-minute hard timeout.
+
+The normal application server defaults to `127.0.0.1:8080`; `VIDEO_SHARE_ADDR`
+can explicitly select another bind address. Its header/read/idle timeouts are
+configured, with writes left unbounded for media streaming. The disposable
+fixture remains restricted to `127.0.0.1:18765`. Application sessions expire
+after 24 hours, and login/registration share a 10-attempt-per-5-minute
+in-process IP limit; the fixture server bypasses that limiter because its
+tests perform many loopback logins within seconds. Ordinary/edit/upload POST
+bodies are capped at 1/10/512 MiB, respectively.
 
 The development dependency is pinned to `@playwright/test` 1.64.1. Matching
 Chromium v1248 is installed locally. Run the suite with:
@@ -47,10 +58,13 @@ npm run test:e2e:report
 
 The browser cases cover dashboard multipart uploads and simulated thumbnail
 preview state, public/private/locked watch and media access,
-owner/other-user/admin authorization, comments, avatars, and registration. Go
-regression tests separately cover startup, discovery channel locks, comment
-ownership, shared media URLs, thumbnail validation, database failures, and
-path aliases.
+owner/other-user/admin authorization, comment privacy and ownership, avatar
+selection/save/reload/removal, and registration. The avatar browser case uses a
+synthetic JPEG fixture. Go regression tests separately cover pooled
+foreign-key enforcement, request limits, session expiry, password and
+rate-limit policies, server configuration, startup, discovery channel locks,
+comment ownership/privacy, shared media URLs, thumbnail validation, database
+failures, and path aliases.
 
 Run the runner lifecycle unit tests without starting the fixture server:
 

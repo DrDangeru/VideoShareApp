@@ -54,6 +54,12 @@ func TestPlaywrightServer(t *testing.T) {
 	adminID := insertUser(t, s.db, "admin@e2e.test", e2eFixturePassword, "Sofia", true)
 	insertChannel(t, s.db, "101", "E2E Open Channel", "Sofia", ownerID, false)
 	insertChannel(t, s.db, "102", "E2E Locked Channel", "Sofia", ownerID, true)
+	insertChannel(t, s.db, "103", "E2E Avatar Channel", "Sofia", ownerID, false)
+	insertChannel(t, s.db, "104", "E2E Mobile Avatar Channel", "Sofia", ownerID, false)
+	insertChannel(t, s.db, "105", "E2E Locked Action Channel", "Action Test", ownerID, true)
+	insertChannel(t, s.db, "106", "E2E Mobile Locked Action Channel", "Action Test", ownerID, true)
+	insertChannel(t, s.db, "107", "E2E Open Action Channel", "Action Test", ownerID, false)
+	insertChannel(t, s.db, "108", "E2E Mobile Open Action Channel", "Action Test", ownerID, false)
 
 	fixtures := e2eFixtures{
 		Ready: true,
@@ -63,8 +69,14 @@ func TestPlaywrightServer(t *testing.T) {
 			"admin": adminID,
 		},
 		Channels: map[string]string{
-			"open":   "101",
-			"locked": "102",
+			"open":                "101",
+			"locked":              "102",
+			"avatar":              "103",
+			"avatarMobile":        "104",
+			"lockedActions":       "105",
+			"lockedActionsMobile": "106",
+			"openActions":         "107",
+			"openActionsMobile":   "108",
 		},
 		Videos: map[string]int64{
 			"public":           101,
@@ -124,6 +136,12 @@ func TestPlaywrightServer(t *testing.T) {
 	}
 	if _, err := s.db.Exec(`update videos set allow_comments = 0 where id = 105`); err != nil {
 		t.Fatalf("disable comments on fixture video: %v", err)
+	}
+	if _, err := s.db.Exec(
+		`insert into comments(video_id, user_id, content) values(101, ?, 'SYNTHETIC-E2E-PRIVACY-COMMENT')`,
+		otherID,
+	); err != nil {
+		t.Fatalf("insert comment privacy fixture: %v", err)
 	}
 
 	for _, channel := range []struct {

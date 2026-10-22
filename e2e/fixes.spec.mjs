@@ -73,6 +73,10 @@ async function postComment(request, videoID, content) {
   });
 }
 
+async function postChannelAction(request, channelID, action) {
+  return request.post(appURL(`/channels/${channelID}/${action}`), { maxRedirects: 0 });
+}
+
 async function waitForPrerollDismissal(page) {
   await expect(page.locator('#preroll-ad-overlay')).toBeHidden({ timeout: 8000 });
 }
@@ -361,9 +365,15 @@ test('anonymous users can fetch only registered public fixtures', async ({ page,
   await expect(page.getByRole('heading', { name: 'E2E Public Video' })).toBeVisible();
   await assertConfiguredContext(page, contextOptions);
   await expectResponsiveLayout(page, true);
+  const privacyComment = page.locator('.comment-item').filter({
+    hasText: 'SYNTHETIC-E2E-PRIVACY-COMMENT',
+  });
+  await expect(privacyComment.locator('strong')).toHaveText(`Member ${fixtures.users.other}`);
   const publicWatchBody = await page.locator('body').innerText();
+  expect(publicWatchBody).not.toContain('other@e2e.test');
   expect(publicWatchBody).not.toContain('E2E Video Locked');
   expect(publicWatchBody).not.toContain('E2E Channel Locked');
+  expect((await getStatus(request, `/channel/${fixtures.channels.locked}`)).status()).toBe(404);
 
   for (const videoID of [
     fixtures.videos.private,
@@ -423,6 +433,56 @@ test('owner, other-user, and admin access follows private and lock policies', as
     for (const role of ['owner', 'other', 'admin']) {
       roles[role] = await createRolePage(browser, role, contextOptions);
     }
+    for (const role of ['owner', 'other']) {
+      expect(
+        (await getStatus(roles[role].page.request, `/channel/${fixtures.channels.locked}`)).status(),
+      ).toBe(404);
+    }
+    expect(
+      (await getStatus(roles.admin.page.request, `/channel/${fixtures.channels.locked}`)).status(),
+    ).toBe(200);
+    expect(
+      (await getStatus(roles.owner.page.request, `/edit-channel/${fixtures.channels.locked}`)).status(),
+    ).toBe(200);
+    expect(
+      (await getStatus(roles.other.page.request, `/edit-channel/${fixtures.channels.locked}`)).status(),
+    ).toBe(404);
+
+    const actionChannelKey = contextOptions.isMobile ? 'lockedActionsMobile' : 'lockedActions';
+    const openActionChannelKey = contextOptions.isMobile ? 'openActionsMobile' : 'openActions';
+    const lockedActionChannel = fixtures.channels[actionChannelKey];
+    const openActionChannel = fixtures.channels[openActionChannelKey];
+    const lockedActionName = contextOptions.isMobile
+      ? 'E2E Mobile Locked Action Channel'
+      : 'E2E Locked Action Channel';
+    for (const action of ['subscribe', 'notify']) {
+      const anonymousResponse = await postChannelAction(request, lockedActionChannel, action);
+      expect(anonymousResponse.status(), `anonymous ${action} locked channel`).toBe(303);
+      expect(anonymousResponse.headers().location).toBe('/login');
+      expect(await anonymousResponse.text()).not.toContain(lockedActionName);
+      for (const role of ['owner', 'other']) {
+        const response = await postChannelAction(roles[role].page.request, lockedActionChannel, action);
+        expect(response.status(), `${role} ${action} locked channel`).toBe(404);
+        expect(response.headers().location).toBeUndefined();
+        expect(await response.text()).not.toContain(lockedActionName);
+      }
+    }
+    expect(
+      (await postChannelAction(roles.admin.page.request, lockedActionChannel, 'subscribe')).status(),
+    ).toBe(303);
+    expect(
+      (await postChannelAction(roles.admin.page.request, lockedActionChannel, 'notify')).status(),
+    ).toBe(303);
+
+    const missingOpenNotification = await postChannelAction(
+      roles.other.page.request,
+      openActionChannel,
+      'notify',
+    );
+    expect(missingOpenNotification.status()).toBe(404);
+    expect(missingOpenNotification.headers().location).toBeUndefined();
+    expect((await postChannelAction(roles.other.page.request, openActionChannel, 'subscribe')).status()).toBe(303);
+    expect((await postChannelAction(roles.other.page.request, openActionChannel, 'notify')).status()).toBe(303);
 
     const watchCases = [
       ['public', 'owner', 200],
@@ -632,6 +692,101 @@ test("channel owner can remove another user's public comment from the watch page
     await expect(page.getByText(comment, { exact: true })).toHaveCount(0);
   } finally {
     await other.context.close();
+  }
+});
+
+test('channel owner can save, reload, and remove a synthetic avatar', async ({
+  browser,
+  contextOptions,
+  request,
+}) => {
+  const fixtures = await loadFixtures(request);
+  const { context, page } = await createRolePage(browser, 'owner', contextOptions);
+  const pageErrors = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  const channelID = contextOptions.isMobile
+    ? fixtures.channels.avatarMobile
+    : fixtures.channels.avatar;
+  const editURL = appURL(`/edit-channel/${channelID}`);
+  const avatarURL = `/static/uploads/channels/${channelID}/avatar.jpg`;
+  try {
+    const editResponse = await page.goto(editURL);
+    expect(editResponse?.status()).toBe(200);
+    await expect(page.getByRole('heading', { name: 'Edit Channel Settings' })).toBeVisible();
+    const encoded = fixtures.thumbnailDataURL.split(',')[1];
+    expect(fixtures.thumbnailDataURL).toMatch(/^data:image\/jpeg;base64,/);
+    const fileInput = page.locator('#avatar-upload');
+    const invalidAvatarFile = {
+      name: 'synthetic-avatar.gif',
+      mimeType: 'image/gif',
+      buffer: Buffer.from('SYNTHETIC-INVALID-AVATAR-TYPE'),
+    };
+    const validAvatarFile = {
+      name: contextOptions.isMobile ? 'synthetic-mobile-avatar.jpg' : 'synthetic-avatar.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from(encoded, 'base64'),
+    };
+    await fileInput.setInputFiles(validAvatarFile);
+    await expect(page.locator('#avatar-data')).toHaveValue(fixtures.thumbnailDataURL);
+    await expect(page.locator('#avatar-preview')).toHaveAttribute('src', fixtures.thumbnailDataURL);
+    await expect.poll(() => page.locator('#avatar-preview').evaluate((img) => img.naturalWidth)).toBe(640);
+
+    await fileInput.setInputFiles(invalidAvatarFile);
+    await expect(page.locator('#avatar-data')).toHaveValue('');
+    await expect(page.locator('#avatar-preview')).toBeHidden();
+    await expect(page.locator('#avatar-error')).toContainText('JPEG or PNG');
+
+    await fileInput.setInputFiles(validAvatarFile);
+    await expect(page.locator('#avatar-data')).toHaveValue(fixtures.thumbnailDataURL);
+    await expect(page.locator('#avatar-preview')).toHaveAttribute('src', fixtures.thumbnailDataURL);
+
+    await page.evaluate(() => {
+      window.originalAvatarReadAsDataURL = FileReader.prototype.readAsDataURL;
+      FileReader.prototype.readAsDataURL = function() {
+        this.dispatchEvent(new Event('error'));
+      };
+    });
+    await fileInput.setInputFiles({
+      name: 'synthetic-reader-error.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('SYNTHETIC-AVATAR-READER-ERROR'),
+    });
+    await expect(page.locator('#avatar-data')).toHaveValue('');
+    await expect(page.locator('#avatar-preview')).toBeHidden();
+    await expect(page.locator('#avatar-error')).toContainText('could not be read');
+    await page.evaluate(() => {
+      FileReader.prototype.readAsDataURL = window.originalAvatarReadAsDataURL;
+      delete window.originalAvatarReadAsDataURL;
+    });
+
+    await fileInput.setInputFiles(validAvatarFile);
+    await expect(page.locator('#avatar-data')).toHaveValue(fixtures.thumbnailDataURL);
+    await expect(page.locator('#avatar-preview')).toHaveAttribute('src', fixtures.thumbnailDataURL);
+    await expect.poll(() => page.locator('#avatar-preview').evaluate((img) => img.naturalWidth)).toBe(640);
+
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(page).toHaveURL(appURL(`/channel/${channelID}`));
+    await page.goto(editURL);
+    await expect(page.locator('#avatar-preview')).toHaveAttribute('src', avatarURL);
+    await expect.poll(() => page.locator('#avatar-preview').evaluate((img) => img.naturalWidth)).toBe(640);
+    const savedAvatar = await page.request.get(appURL(avatarURL), { maxRedirects: 0 });
+    expect(savedAvatar.status()).toBe(200);
+    expect(savedAvatar.headers()['content-type']).toContain('image/jpeg');
+
+    await page.getByRole('button', { name: 'Remove Image' }).click();
+    await expect(page.locator('#avatar-data')).toHaveValue('');
+    await expect(page.locator('#remove-avatar')).toHaveValue('1');
+    await expect(page.locator('#avatar-preview')).toBeHidden();
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(page).toHaveURL(appURL(`/channel/${channelID}`));
+    await page.goto(editURL);
+    await expect(page.locator('#avatar-preview')).toBeHidden();
+    expect(await page.locator('#avatar-preview').getAttribute('src')).toBeNull();
+    await expect(page.locator('#remove-avatar')).toHaveValue('0');
+    expect((await page.request.get(appURL(avatarURL), { maxRedirects: 0 })).status()).toBe(404);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await context.close();
   }
 });
 
