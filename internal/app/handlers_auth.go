@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -19,6 +20,17 @@ func (s *Server) registerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !s.allowLoginAttempt(w, r) {
+		return
+	}
+	cleanup, err := parseRequestForm(w, r, defaultFormBodyLimit, multipartMemoryLimit)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		rejectFormParseError(w, err)
+		return
+	}
 
 	email := strings.TrimSpace(r.FormValue("email"))
 	password := r.FormValue("password")
@@ -26,6 +38,15 @@ func (s *Server) registerHandler(w http.ResponseWriter, r *http.Request) {
 	if email == "" || password == "" || location == "" {
 		s.renderAuth(w, AuthPageData{Title: "Register", Heading: "Create account", Action: "/register",
 			SubmitLabel: "Register", ShowLocation: true, Error: "All fields are required."})
+		return
+	}
+	if !utf8.ValidString(password) || utf8.RuneCountInString(password) < 8 ||
+		len(password) > 72 || strings.TrimSpace(password) == "" {
+		http.Error(
+			w,
+			"Password must be at least 8 characters, no more than 72 bytes, and not all whitespace.",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
@@ -68,9 +89,30 @@ func (s *Server) loginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !s.allowLoginAttempt(w, r) {
+		return
+	}
+	cleanup, err := parseRequestForm(w, r, defaultFormBodyLimit, multipartMemoryLimit)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		rejectFormParseError(w, err)
+		return
+	}
 
 	email := strings.TrimSpace(r.FormValue("email"))
 	password := r.FormValue("password")
+	if !utf8.ValidString(password) || len(password) > 72 {
+		s.renderAuth(w, AuthPageData{
+			Title:       "Login",
+			Heading:     "Welcome back",
+			Action:      "/login",
+			SubmitLabel: "Login",
+			Error:       "Invalid credentials.",
+		})
+		return
+	}
 	user, hash, err := s.findUserByEmail(email)
 	if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
 		s.renderAuth(w, AuthPageData{

@@ -8,7 +8,10 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"time"
 )
+
+const sessionLifetime = 24 * time.Hour
 
 func (s *Server) serverError(w http.ResponseWriter, err error) {
 	log.Println("server error:", err)
@@ -49,7 +52,9 @@ func (s *Server) currentUser(r *http.Request) (*User, error) {
 		from sessions s
 		join users u on u.id = s.user_id
 		where s.token = ?
-	`, cookie.Value)
+			and datetime(s.created_at) > datetime('now', ? || ' seconds')
+			and datetime(s.created_at) <= datetime('now')
+	`, cookie.Value, -int64(sessionLifetime/time.Second))
 
 	var user User
 	if err := row.Scan(&user.ID, &user.Email, &user.Location, &user.IsAdmin); err != nil {
@@ -73,11 +78,28 @@ func (s *Server) createSession(w http.ResponseWriter, userID int64) error {
 		return err
 	}
 	token := hex.EncodeToString(b)
-	if _, err := s.db.Exec(
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`
+		delete from sessions
+		where datetime(created_at) is null
+			or datetime(created_at) <= datetime('now', ? || ' seconds')
+			or datetime(created_at) > datetime('now')
+	`, -int64(sessionLifetime/time.Second)); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(
 		`insert into sessions(token, user_id) values(?, ?)`,
 		token,
 		userID,
 	); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 

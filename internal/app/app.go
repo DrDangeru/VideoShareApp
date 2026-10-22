@@ -5,10 +5,13 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
+	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
+
+const applicationDatabaseDSN = "file:data/app.db?_pragma=foreign_keys(1)"
 
 func New() (*Server, error) {
 	if err := os.MkdirAll("data", 0755); err != nil {
@@ -16,23 +19,20 @@ func New() (*Server, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("sqlite", filepath.Join("data", "app.db"))
+	db, err := sql.Open("sqlite", applicationDatabaseDSN)
 	if err != nil {
 		log.Println("sql.Open error:", err)
 		return nil, err
 	}
 
-	if _, err := db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
-		log.Println("PRAGMA foreign_keys error:", err)
-		return nil, err
-	}
-
 	if err := initSchema(db); err != nil {
+		_ = db.Close()
 		log.Println("initSchema error:", err)
 		return nil, err
 	}
 
 	if err := seedData(db); err != nil {
+		_ = db.Close()
 		log.Println("seedData error:", err)
 		return nil, err
 	}
@@ -47,7 +47,25 @@ func New() (*Server, error) {
 }
 
 func (s *Server) Run() error {
-	return http.ListenAndServe(":8080", s.mux)
+	server := s.httpServer()
+	log.Printf("server started on http://%s", server.Addr)
+	return server.ListenAndServe()
+}
+
+func (s *Server) httpServer() *http.Server {
+	address := strings.TrimSpace(os.Getenv("VIDEO_SHARE_ADDR"))
+	if address == "" {
+		address = "127.0.0.1:8080"
+	}
+	return &http.Server{
+		Addr:              address,
+		Handler:           s.mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Minute,
+		WriteTimeout:      0,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
 }
 
 func (s *Server) routes() {

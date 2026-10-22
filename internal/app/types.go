@@ -7,8 +7,9 @@ import (
 
 // Core Application State
 type Server struct {
-	db  *sql.DB
-	mux *http.ServeMux
+	db           *sql.DB
+	mux          *http.ServeMux
+	loginLimiter loginLimiter
 }
 
 // Domain Models
@@ -183,12 +184,12 @@ type EditChannelPageData struct {
 }
 
 type Comment struct {
-	ID        int64
-	VideoID   int64
-	UserID    int64
-	Content   string
-	CreatedAt string
-	UserEmail string
+	ID         int64
+	VideoID    int64
+	UserID     int64
+	Content    string
+	CreatedAt  string
+	AuthorName string
 }
 
 type VideoPageData struct {
