@@ -387,3 +387,60 @@ func TestSecurityDashboardUploadTemplate(t *testing.T) {
 		}
 	}
 }
+
+func TestOwnerCannotSetVideoAdminLock(t *testing.T) {
+	s := newTestServer(t)
+	ownerID := insertUser(t, s.db, "lock-owner@security.test", "synthetic-password", "Sofia", false)
+	adminID := insertUser(t, s.db, "lock-admin@security.test", "synthetic-password", "Sofia", true)
+	otherID := insertUser(t, s.db, "lock-other@security.test", "synthetic-password", "Sofia", false)
+	insertChannel(t, s.db, "101", "Owner Lock Channel", "Sofia", ownerID, false)
+	insertVideo(t, s.db, testVideoRow{
+		id: 1, channelID: "101", title: "Owner Lock Video", description: "fixture",
+		mediaURL: "/media/owner-lock.mp4", thumbURL: "/media/owner-lock.jpg",
+		location: "Sofia", userID: ownerID, isPublic: 1,
+	})
+	ownerCookie := newSessionCookie(t, s, ownerID)
+	adminCookie := newSessionCookie(t, s, adminID)
+	otherCookie := newSessionCookie(t, s, otherID)
+
+	for _, tc := range []struct {
+		name       string
+		cookie     *http.Cookie
+		initial    int
+		submitted  string
+		wantLocked int
+		wantStatus int
+	}{
+		{"owner cannot set", ownerCookie, 0, "1", 0, http.StatusSeeOther},
+		{"owner cannot clear", ownerCookie, 1, "0", 1, http.StatusSeeOther},
+		{"other cannot set", otherCookie, 0, "1", 0, http.StatusNotFound},
+		{"other cannot clear", otherCookie, 1, "0", 1, http.StatusNotFound},
+		{"admin can set", adminCookie, 0, "1", 1, http.StatusSeeOther},
+		{"admin can clear", adminCookie, 1, "0", 0, http.StatusSeeOther},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := s.db.Exec(`update videos set is_admin_locked = ? where id = 1`, tc.initial); err != nil {
+				t.Fatalf("set initial video lock: %v", err)
+			}
+			rec := doRequest(t, s, http.MethodPost, "/edit-video/1", url.Values{
+				"title":           {"Owner Lock Video"},
+				"description":     {"fixture"},
+				"location":        {"Sofia"},
+				"is_public":       {"1"},
+				"allow_comments":  {"1"},
+				"made_for_kids":   {"0"},
+				"is_admin_locked": {tc.submitted},
+			}, tc.cookie)
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("edit status = %d, want %d; body=%q", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+			var locked int
+			if err := s.db.QueryRow(`select is_admin_locked from videos where id = 1`).Scan(&locked); err != nil {
+				t.Fatalf("read video lock: %v", err)
+			}
+			if locked != tc.wantLocked {
+				t.Errorf("video is_admin_locked = %d, want %d", locked, tc.wantLocked)
+			}
+		})
+	}
+}

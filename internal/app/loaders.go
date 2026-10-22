@@ -1,6 +1,9 @@
 package app
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 func (s *Server) loadSimilarVideos(
 	videoID, channelID int64,
@@ -507,9 +510,8 @@ func (s *Server) loadManageableChannels(user *User) ([]Channel, error) {
 
 func (s *Server) loadComments(videoID int64) ([]Comment, error) {
 	rows, err := s.db.Query(`
-		select c.id, c.video_id, c.user_id, c.content, c.created_at, u.email
+		select c.id, c.video_id, c.user_id, c.content, c.created_at
 		from comments c
-		join users u on u.id = c.user_id
 		where c.video_id = ?
 		order by c.created_at desc
 	`, videoID)
@@ -521,9 +523,10 @@ func (s *Server) loadComments(videoID int64) ([]Comment, error) {
 	var comments []Comment
 	for rows.Next() {
 		var c Comment
-		if err := rows.Scan(&c.ID, &c.VideoID, &c.UserID, &c.Content, &c.CreatedAt, &c.UserEmail); err != nil {
+		if err := rows.Scan(&c.ID, &c.VideoID, &c.UserID, &c.Content, &c.CreatedAt); err != nil {
 			return nil, err
 		}
+		c.AuthorName = fmt.Sprintf("Member %d", c.UserID)
 		comments = append(comments, c)
 	}
 	return comments, rows.Err()

@@ -2,7 +2,6 @@ package app
 
 import (
 	"database/sql"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -54,6 +53,10 @@ func (s *Server) channelPageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, _ := s.currentUser(r)
+	if ch.IsAdminLocked && (user == nil || !user.IsAdmin) {
+		http.NotFound(w, r)
+		return
+	}
 	var isSubscribed bool
 	if user != nil {
 		_ = s.db.QueryRow(
@@ -229,6 +232,15 @@ func (s *Server) editChannelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
+		cleanup, formErr := parseRequestForm(w, r, editFormBodyLimit, multipartMemoryLimit)
+		if cleanup != nil {
+			defer cleanup()
+		}
+		if formErr != nil {
+			rejectFormParseError(w, formErr)
+			return
+		}
+
 		var channelOwnerID int64
 		if err := s.db.QueryRow(
 			`select user_id from channels where id = ?`,
@@ -252,7 +264,8 @@ func (s *Server) editChannelHandler(w http.ResponseWriter, r *http.Request) {
 			name := strings.TrimSpace(r.FormValue("name"))
 			location := strings.TrimSpace(r.FormValue("location"))
 			description := r.FormValue("description")
-			avatarBase64 := r.FormValue("avatar")
+			avatarData := r.FormValue("avatar")
+			removeAvatar := r.FormValue("remove_avatar") == "1"
 
 			if name == "" {
 				name = "Unnamed Channel"
@@ -261,26 +274,43 @@ func (s *Server) editChannelHandler(w http.ResponseWriter, r *http.Request) {
 				location = "Unknown"
 			}
 
-			var avatarURL string
-			if avatarBase64 != "" {
-				b64data := avatarBase64
-				if idx := strings.Index(avatarBase64, ","); idx != -1 {
-					b64data = avatarBase64[idx+1:]
-				}
-
-				imgBytes, err := base64.StdEncoding.DecodeString(b64data)
-				if err == nil {
-					avatarDir := filepath.Join("static", "uploads", "channels", fmt.Sprintf("%d", channelID))
-					if mkErr := os.MkdirAll(avatarDir, 0755); mkErr == nil {
-						avatarPath := filepath.Join(avatarDir, "avatar.jpg")
-						if err = os.WriteFile(avatarPath, imgBytes, 0644); err == nil {
-							avatarURL = "/" + filepath.ToSlash(avatarPath)
-						}
-					}
+			if removeAvatar && avatarData != "" {
+				http.Error(w, "Choose an avatar or remove the current one, not both.", http.StatusBadRequest)
+				return
+			}
+			var avatarBytes []byte
+			if !removeAvatar {
+				avatarBytes, err = decodeThumbnail(avatarData)
+				if err != nil {
+					http.Error(w, "Invalid avatar image.", http.StatusBadRequest)
+					return
 				}
 			}
 
-			if avatarURL != "" {
+			var avatarURL string
+			if avatarBytes != nil {
+				avatarDir := filepath.Join("static", "uploads", "channels", strconv.FormatInt(channelID, 10))
+				if err := os.MkdirAll(avatarDir, 0o755); err != nil {
+					s.serverError(w, err)
+					return
+				}
+				avatarPath := filepath.Join(avatarDir, "avatar.jpg")
+				if err := os.WriteFile(avatarPath, avatarBytes, 0o644); err != nil {
+					s.serverError(w, err)
+					return
+				}
+				avatarURL = "/" + filepath.ToSlash(avatarPath)
+			}
+
+			if removeAvatar {
+				_, err = s.db.Exec(
+					`update channels set name = ?, location = ?, description = ?, avatar_url = '' where id = ?`,
+					name,
+					location,
+					description,
+					channelID,
+				)
+			} else if avatarURL != "" {
 				_, err = s.db.Exec(
 					`update channels set
 						name = ?,
@@ -348,6 +378,14 @@ func (s *Server) channelActionHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	cleanup, formErr := parseRequestForm(w, r, defaultFormBodyLimit, multipartMemoryLimit)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if formErr != nil {
+		rejectFormParseError(w, formErr)
+		return
+	}
 
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) != 3 || parts[0] != "channels" {
@@ -367,35 +405,77 @@ func (s *Server) channelActionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get channel name for toast notification
 	var channelName string
-	s.db.QueryRow(`select name from channels where id = ?`, channelID).Scan(&channelName)
+	var channelAdminLocked int
+	if err := s.db.QueryRow(
+		`select name, is_admin_locked from channels where id = ?`,
+		channelID,
+	).Scan(&channelName, &channelAdminLocked); err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, r)
+			return
+		}
+		s.serverError(w, err)
+		return
+	}
+	if channelAdminLocked != 0 && !user.IsAdmin {
+		http.NotFound(w, r)
+		return
+	}
 
 	var redirectURL string
 	if action == "subscribe" {
-		// Check if already subscribed
 		var exists int
-		s.db.QueryRow(`select count(*) from subscriptions where user_id = ? and channel_id = ?`, user.ID, channelID).Scan(&exists)
+		if err := s.db.QueryRow(
+			`select count(*) from subscriptions where user_id = ? and channel_id = ?`,
+			user.ID,
+			channelID,
+		).Scan(&exists); err != nil {
+			s.serverError(w, err)
+			return
+		}
 
 		if exists > 0 {
-			// Unsubscribe
 			_, err = s.db.Exec(`delete from subscriptions where user_id = ? and channel_id = ?`, user.ID, channelID)
 			redirectURL = "/?unsubscribed=" + url.QueryEscape(channelName)
 		} else {
-			// Subscribe
 			_, err = s.db.Exec(`insert into subscriptions(user_id, channel_id) values(?, ?)`, user.ID, channelID)
 			redirectURL = "/?subscribed=" + url.QueryEscape(channelName)
 		}
 	} else {
-		// Toggle notify
 		var currentNotify int
-		s.db.QueryRow(`select notify from subscriptions where user_id = ? and channel_id = ?`, user.ID, channelID).Scan(&currentNotify)
+		err := s.db.QueryRow(
+			`select notify from subscriptions where user_id = ? and channel_id = ?`,
+			user.ID,
+			channelID,
+		).Scan(&currentNotify)
+		if err == sql.ErrNoRows {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			s.serverError(w, err)
+			return
+		}
 
-		_, err = s.db.Exec(
+		result, err := s.db.Exec(
 			`update subscriptions set notify = case when notify = 1 then 0 else 1 end where user_id = ? and channel_id = ?`,
 			user.ID,
 			channelID,
 		)
+		if err != nil {
+			s.serverError(w, err)
+			return
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			s.serverError(w, err)
+			return
+		}
+		if affected == 0 {
+			http.NotFound(w, r)
+			return
+		}
 
 		if currentNotify == 1 {
 			redirectURL = "/?notify_off=" + url.QueryEscape(channelName)
@@ -407,6 +487,5 @@ func (s *Server) channelActionHandler(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, err)
 		return
 	}
-
 	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }

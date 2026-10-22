@@ -70,7 +70,8 @@
       <form action="/add-comment" method="post" class="comment-form form">
         <input type="hidden" name="video_id" value="{{.Video.ID}}">
         <label>
-          <textarea name="content" rows="2" placeholder="Add a comment..." required></textarea>
+          <textarea name="content" rows="2" placeholder="Add a comment..." maxlength="4000" required></textarea>
+          <small class="muted">Maximum 4000 characters.</small>
         </label>
         <div class="form-actions" style="justify-content: flex-start; margin-top: 8px;">
           <button type="submit" class="button">Comment</button>
@@ -86,11 +87,11 @@
         {{range .Comments}}
         <div class="comment-item">
           <div class="comment-avatar">
-            {{slice .UserEmail 0 1}}
+            {{slice .AuthorName 0 1}}
           </div>
           <div class="comment-content-wrapper">
             <div class="comment-header">
-              <strong>{{.UserEmail}}</strong>
+              <strong>{{.AuthorName}}</strong>
               <span class="muted">{{.CreatedAt}}</span>
             </div>
             <div class="comment-body">

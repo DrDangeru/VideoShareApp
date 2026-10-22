@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 func (s *Server) videoActionHandler(w http.ResponseWriter, r *http.Request) {
@@ -21,6 +21,14 @@ func (s *Server) videoActionHandler(w http.ResponseWriter, r *http.Request) {
 	user, err := s.requireUser(r)
 	if err != nil {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	cleanup, formErr := parseRequestForm(w, r, defaultFormBodyLimit, multipartMemoryLimit)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if formErr != nil {
+		rejectFormParseError(w, formErr)
 		return
 	}
 
@@ -61,14 +69,13 @@ func (s *Server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = r.ParseMultipartForm(50 << 20)
-	if err != nil {
-		log.Println("parse form error:", err)
-		http.Error(w, "Failed to parse upload", http.StatusBadRequest)
-		return
+	cleanup, formErr := parseRequestForm(w, r, uploadBodyLimit, multipartMemoryLimit)
+	if cleanup != nil {
+		defer cleanup()
 	}
-	if r.MultipartForm != nil {
-		defer r.MultipartForm.RemoveAll()
+	if formErr != nil {
+		rejectFormParseError(w, formErr)
+		return
 	}
 	thumbnailBytes, err := decodeThumbnail(r.FormValue("thumbnail_base64"))
 	if err != nil {
@@ -299,6 +306,15 @@ func (s *Server) editVideoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
+		cleanup, formErr := parseRequestForm(w, r, editFormBodyLimit, multipartMemoryLimit)
+		if cleanup != nil {
+			defer cleanup()
+		}
+		if formErr != nil {
+			rejectFormParseError(w, formErr)
+			return
+		}
+
 		var channelOwnerID int64
 		row := s.db.QueryRow(`
 			select c.user_id
@@ -560,6 +576,14 @@ func (s *Server) addCommentHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	cleanup, formErr := parseRequestForm(w, r, defaultFormBodyLimit, multipartMemoryLimit)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if formErr != nil {
+		rejectFormParseError(w, formErr)
+		return
+	}
 
 	videoIDStr := r.FormValue("video_id")
 	videoID, err := strconv.ParseInt(videoIDStr, 10, 64)
@@ -571,6 +595,10 @@ func (s *Server) addCommentHandler(w http.ResponseWriter, r *http.Request) {
 	content := strings.TrimSpace(r.FormValue("content"))
 	if content == "" {
 		http.Error(w, "Comment cannot be empty", http.StatusBadRequest)
+		return
+	}
+	if !utf8.ValidString(content) || utf8.RuneCountInString(content) > 4000 {
+		http.Error(w, "Comment must be no more than 4000 characters.", http.StatusBadRequest)
 		return
 	}
 
@@ -633,6 +661,14 @@ func (s *Server) deleteCommentHandler(w http.ResponseWriter, r *http.Request) {
 			Action:      "/login",
 			SubmitLabel: "Login",
 		})
+		return
+	}
+	cleanup, formErr := parseRequestForm(w, r, defaultFormBodyLimit, multipartMemoryLimit)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if formErr != nil {
+		rejectFormParseError(w, formErr)
 		return
 	}
 

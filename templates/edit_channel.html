@@ -14,16 +14,19 @@
       <p class="muted help-text text-center">Select an image to use as your channel avatar.</p>
       
       <div class="avatar-upload-wrapper">
+        {{if .Channel.AvatarURL}}
+        <img id="avatar-preview" src="{{.Channel.AvatarURL}}" alt="Channel avatar" class="avatar-preview">
+        {{else}}
+        <img id="avatar-preview" alt="Channel avatar preview" class="avatar-preview hidden">
+        {{end}}
         <div class="avatar-upload-actions">
-          <button type="button" class="button secondary" 
-                  onclick="document.getElementById('avatar-upload').click()">Upload Image</button>
-          <button type="button" class="button secondary danger" 
-                  onclick="clearAvatar()">Remove Image</button>
+          <button type="button" id="avatar-select" class="button secondary">Upload Image</button>
+          <button type="button" id="avatar-remove" class="button secondary danger">Remove Image</button>
         </div>
-        <input type="file" id="avatar-upload" accept="image/jpeg,image/png,image/webp" 
-               style="display:none;" onchange="handleAvatarSelect(event)">
-        <input type="hidden" name="avatar_base64" id="avatar-base64">
+        <input type="file" id="avatar-upload" accept="image/jpeg,image/png" style="display:none;">
+        <input type="hidden" name="avatar" id="avatar-data">
         <input type="hidden" name="remove_avatar" id="remove-avatar" value="0">
+        <p id="avatar-error" class="error-message hidden" role="alert"></p>
       </div>
     </div>
 
@@ -79,20 +82,81 @@
   const fileInput = document.getElementById('avatar-upload');
   const preview = document.getElementById('avatar-preview');
   const avatarData = document.getElementById('avatar-data');
+  const removeAvatar = document.getElementById('remove-avatar');
+  const avatarError = document.getElementById('avatar-error');
+  const selectButton = document.getElementById('avatar-select');
+  const removeButton = document.getElementById('avatar-remove');
+  let selection = 0;
+  let reader = null;
 
-  fileInput.addEventListener('change', function(e) {
-    const file = e.target.files[0];
+  function clearSelection(removeCurrentAvatar) {
+    selection += 1;
+    if (reader && reader.readyState === FileReader.LOADING) reader.abort();
+    reader = null;
+    avatarData.value = '';
+    fileInput.value = '';
+    preview.removeAttribute('src');
+    preview.classList.add('hidden');
+    preview.classList.remove('block');
+    removeAvatar.value = removeCurrentAvatar ? '1' : '0';
+    avatarError.textContent = '';
+    avatarError.classList.add('hidden');
+  }
+
+  function showAvatarError(message) {
+    clearSelection(false);
+    avatarError.textContent = message;
+    avatarError.classList.remove('hidden');
+  }
+
+  selectButton.addEventListener('click', function() {
+    fileInput.value = '';
+    fileInput.click();
+  });
+
+  removeButton.addEventListener('click', function() {
+    clearSelection(true);
+  });
+
+  fileInput.addEventListener('change', function() {
+    const file = fileInput.files && fileInput.files[0];
+    clearSelection(false);
     if (!file) return;
+    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      showAvatarError('Choose a JPEG or PNG image no larger than 2 MiB.');
+      return;
+    }
 
-    const reader = new FileReader();
-    reader.onload = function(event) {
-      const dataUrl = event.target.result;
+    const currentSelection = selection;
+    const currentReader = new FileReader();
+    reader = currentReader;
+    currentReader.onload = function() {
+      if (selection !== currentSelection || reader !== currentReader) return;
+      const dataUrl = typeof currentReader.result === 'string' ? currentReader.result : '';
+      if (!dataUrl.startsWith('data:image/jpeg;base64,') &&
+          !dataUrl.startsWith('data:image/png;base64,')) {
+        showAvatarError('The selected image could not be read.');
+        return;
+      }
       avatarData.value = dataUrl;
       preview.src = dataUrl;
       preview.classList.remove('hidden');
       preview.classList.add('block');
+      avatarError.textContent = '';
+      avatarError.classList.add('hidden');
     };
-    reader.readAsDataURL(file);
+    currentReader.onerror = function() {
+      if (selection === currentSelection && reader === currentReader) {
+        showAvatarError('The selected image could not be read.');
+      }
+    };
+    try {
+      currentReader.readAsDataURL(file);
+    } catch (error) {
+      if (selection === currentSelection && reader === currentReader) {
+        showAvatarError('The selected image could not be read.');
+      }
+    }
   });
 </script>
 {{end}}

@@ -12,7 +12,8 @@
 
     <label>
       <span>Password</span>
-      <input type="password" name="password" required minlength="6">
+      <input type="password" name="password" required {{if .ShowLocation}}minlength="8"{{end}}>
+      {{if .ShowLocation}}<small class="muted">At least 8 characters, no more than 72 bytes, and not all whitespace.</small>{{end}}
     </label>
 
     {{if .ShowLocation}}
@@ -28,5 +29,3 @@
 {{end}}
 
 {{define "auth"}}{{template "layout" .}}{{end}}
-
-
